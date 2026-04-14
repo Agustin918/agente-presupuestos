@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador de Presupuestos de Construcción</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-home"></i> Sistema Multi-Agente de Presupuestos</h1>
+            <p class="subtitle">Genera presupuestos de construcción automatizados con IA</p>
+        </header>
+
+        <div class="content">
+            <div class="form-container">
+                <h2><i class="fas fa-file-alt"></i> Formulario de Blueprint</h2>
+                <p class="form-description">Completa los datos del proyecto para generar un presupuesto detallado.</p>
+                
+                <form id="blueprintForm">
+                    <div class="form-section">
+                        <h3><i class="fas fa-info-circle"></i> Información Básica</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="nombre_obra">Nombre de la Obra *</label>
+                                <input type="text" id="nombre_obra" name="nombre_obra" required placeholder="Ej: Casa Pilar">
+                            </div>
+                            <div class="form-group">
+                                <label for="ubicacion">Ubicación *</label>
+                                <input type="text" id="ubicacion" name="ubicacion" required placeholder="Ej: Pilar, Buenos Aires">
+                            </div>
+                            <div class="form-group">
+                                <label for="superficie_cubierta_m2">Superficie Cubierta (m²) *</label>
+                                <input type="number" id="superficie_cubierta_m2" name="superficie_cubierta_m2" required min="20" max="1000" value="120">
+                            </div>
+                            <div class="form-group">
+                                <label for="plantas">Plantas *</label>
+                                <select id="plantas" name="plantas" required>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3><i class="fas fa-building"></i> Sistema Constructivo</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="estructura">Estructura *</label>
+                                <select id="estructura" name="estructura" required>
+                                    <option value="albanileria">Albañilería</option>
+                                    <option value="steel_frame">Steel Frame</option>
+                                    <option value="hormigon_armado">Hormigón Armado</option>
+                                    <option value="madera">Madera</option>
+                                    <option value="mixto">Mixto</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="cubierta">Cubierta *</label>
+                                <select id="cubierta" name="cubierta" required>
+                                    <option value="chapa_acanalada">Chapa Acanalada</option>
+                                    <option value="chapa_trapezoidal">Chapa Trapezoidal</option>
+                                    <option value="membrana_losa">Membrana Losa</option>
+                                    <option value="teja_ceramica">Teja Cerámica</option>
+                                    <option value="techo_verde">Techo Verde</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="categoria">Categoría *</label>
+                                <select id="categoria" name="categoria" required>
+                                    <option value="economico">Económico</option>
+                                    <option value="estandar" selected>Estándar</option>
+                                    <option value="premium">Premium</option>
+                                    <option value="lujo">Lujo</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="factor_terminacion">Factor Terminación *</label>
+                                <select id="factor_terminacion" name="factor_terminacion" required>
+                                    <option value="1.0">1.0 (Económico)</option>
+                                    <option value="1.35" selected>1.35 (Estándar)</option>
+                                    <option value="1.8">1.8 (Premium)</option>
+                                    <option value="2.5">2.5 (Lujo)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3><i class="fas fa-paint-roller"></i> Terminaciones</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="pisos">Pisos *</label>
+                                <select id="pisos" name="pisos" required>
+                                    <option value="ceramico">Cerámico</option>
+                                    <option value="porcelanato">Porcelanato</option>
+                                    <option value="madera">Madera</option>
+                                    <option value="microcemento">Microcemento</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="aberturas">Aberturas *</label>
+                                <select id="aberturas" name="aberturas" required>
+                                    <option value="aluminio_dvh">Aluminio DVH</option>
+                                    <option value="aluminio_basico">Aluminio Básico</option>
+                                    <option value="pvc">PVC</option>
+                                    <option value="madera">Madera</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="dormitorios">Dormitorios *</label>
+                                <input type="number" id="dormitorios" name="dormitorios" required min="1" max="10" value="3">
+                            </div>
+                            <div class="form-group">
+                                <label for="cantidad_banos">Baños *</label>
+                                <input type="number" id="cantidad_banos" name="cantidad_banos" required min="1" max="6" value="2">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3><i class="fas fa-bolt"></i> Instalaciones</h3>
+                        <div class="form-group">
+                            <label>Instalaciones *</label>
+                            <div class="checkbox-group">
+                                <label><input type="checkbox" name="instalaciones" value="electrica" checked> Eléctrica</label>
+                                <label><input type="checkbox" name="instalaciones" value="sanitaria" checked> Sanitaria</label>
+                                <label><input type="checkbox" name="instalaciones" value="gas" checked> Gas</label>
+                                <label><input type="checkbox" name="instalaciones" value="calefaccion_radiante"> Calefacción Radiante</label>
+                                <label><input type="checkbox" name="instalaciones" value="aire_acondicionado"> Aire Acondicionado</label>
+                                <label><input type="checkbox" name="instalaciones" value="domotica"> Domótica</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3><i class="fas fa-cogs"></i> Opciones Adicionales</h3>
+                        <div class="form-grid">
+                            <div class="form-group checkbox-inline">
+                                <label><input type="checkbox" id="tiene_cochera" name="tiene_cochera" checked> Cochera</label>
+                            </div>
+                            <div class="form-group checkbox-inline">
+                                <label><input type="checkbox" id="tiene_quincho" name="tiene_quincho"> Quincho</label>
+                            </div>
+                            <div class="form-group checkbox-inline">
+                                <label><input type="checkbox" id="tiene_galeria" name="tiene_galeria" checked> Galería</label>
+                            </div>
+                            <div class="form-group checkbox-inline">
+                                <label><input type="checkbox" id="tiene_deck" name="tiene_deck" checked> Deck</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3><i class="fas fa-calendar-alt"></i> Plazo y Modalidad</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="plazo_meses">Plazo Estimado (meses) *</label>
+                                <input type="number" id="plazo_meses" name="plazo_meses" required min="3" max="36" value="8">
+                            </div>
+                            <div class="form-group">
+                                <label for="modalidad">Modalidad *</label>
+                                <select id="modalidad" name="modalidad" required>
+                                    <option value="llave_en_mano">Llave en Mano</option>
+                                    <option value="administracion">Administración</option>
+                                    <option value="solo_materiales">Solo Materiales</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3><i class="fas fa-upload"></i> Archivos de Proyecto (Opcional)</h3>
+                        <div class="form-group">
+                            <label for="archivos">Subir planos o imágenes:</label>
+                            <input type="file" id="archivos" name="archivos" multiple accept=".pdf,.jpg,.jpeg,.png,.skp,.dwg">
+                            <p class="file-hint">Formatos admitidos: PDF, JPG, PNG, SKP (SketchUp), DWG (AutoCAD)</p>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" id="btnValidar" class="btn btn-secondary">
+                            <i class="fas fa-check"></i> Validar Blueprint
+                        </button>
+                        <button type="button" id="btnGenerar" class="btn btn-primary">
+                            <i class="fas fa-calculator"></i> Generar Presupuesto
+                        </button>
+                        <button type="reset" class="btn btn-reset">
+                            <i class="fas fa-redo"></i> Limpiar Formulario
+                        </button>
+                    </div>
+                </form>
+
+                <div id="resultados" class="results-container">
+                    <!-- Resultados dinámicos -->
+                </div>
+            </div>
+
+            <div class="info-sidebar">
+                <h3><i class="fas fa-lightbulb"></i> Cómo funciona</h3>
+                <div class="info-card">
+                    <h4><i class="fas fa-search"></i> 1. Extracción de datos</h4>
+                    <p>El sistema analiza planos e imágenes para extraer automáticamente dimensiones y características.</p>
+                </div>
+                <div class="info-card">
+                    <h4><i class="fas fa-globe"></i> 2. Búsqueda de precios</h4>
+                    <p>Busca precios actualizados de materiales en internet, considerando inflación y ubicación.</p>
+                </div>
+                <div class="info-card">
+                    <h4><i class="fas fa-brain"></i> 3. Generación inteligente</h4>
+                    <p>Combina datos extraídos, precios actuales y obras históricas para generar el presupuesto.</p>
+                </div>
+                <div class="info-card">
+                    <h4><i class="fas fa-chart-line"></i> 4. Indicadores de confianza</h4>
+                    <p>Cada ítem incluye un indicador de confianza basado en la calidad de los datos de entrada.</p>
+                </div>
+
+                <h3><i class="fas fa-history"></i> Historial Rápido</h3>
+                <div class="history-list">
+                    <div class="history-item">
+                        <strong>Casa Pilar</strong>
+                        <span>120 m² • $912,060</span>
+                        <small>Hace 5 min</small>
+                    </div>
+                    <div class="history-item">
+                        <strong>Departamento Belgrano</strong>
+                        <span>85 m² • $780,400</span>
+                        <small>Hace 2 días</small>
+                    </div>
+                    <div class="history-item">
+                        <strong>Casa Country</strong>
+                        <span>250 m² • $2,150,000</span>
+                        <small>Hace 1 semana</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>Sistema Multi-Agente de Presupuestos v1.0 • Desarrollado para estudios de arquitectura</p>
+            <p class="footer-links">
+                <a href="#"><i class="fas fa-question-circle"></i> Ayuda</a>
+                <a href="#"><i class="fas fa-book"></i> Documentación</a>
+                <a href="#"><i class="fas fa-code"></i> API</a>
+            </p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
