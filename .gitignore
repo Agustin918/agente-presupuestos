@@ -12,7 +12,6 @@ yarn-error.log*
 # Runtime data
 data/cache/
 data/rag/store/
-output/
 dist/
 
 # Editor directories and files
@@ -59,3 +58,15 @@ chroma-data/
 
 # TypeScript cache
 *.tsbuildinfo
+
+# Downloaded skills from external repos
+downloaded_skills/
+openclaw-skills*/
+skills_download*/
+
+# Generated output files (preserve source TypeScript files)
+output/*.xlsx
+output/*.pdf
+output/demo/
+output/*.html
+output/*.json
