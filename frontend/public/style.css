@@ -1268,6 +1268,103 @@ select.error {
 }
 
 /* ========================================
+   FILE UPLOAD STYLES
+   ======================================== */
+.archivos-lista {
+    margin-top: 15px;
+    margin-bottom: 20px;
+}
+
+.no-files {
+    color: var(--gray-color);
+    font-style: italic;
+    text-align: center;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: var(--border-radius);
+}
+
+.files-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: var(--border-radius);
+    border: 1px solid #e0e0e0;
+    transition: var(--transition);
+}
+
+.file-item:hover {
+    background: #e9ecef;
+    border-color: var(--secondary-color);
+}
+
+.file-icon {
+    font-size: 1.5rem;
+    color: var(--secondary-color);
+    min-width: 30px;
+    text-align: center;
+}
+
+.file-icon .fa-file-pdf {
+    color: #e34c26;
+}
+
+.file-icon .fa-file-excel {
+    color: #217346;
+}
+
+.file-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.file-name {
+    font-weight: 500;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-meta {
+    font-size: 0.75rem;
+    color: var(--gray-color);
+}
+
+.file-remove {
+    background: none;
+    border: none;
+    color: var(--gray-color);
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 50%;
+    transition: var(--transition);
+}
+
+.file-remove:hover {
+    background: #f8d7da;
+    color: var(--accent-color);
+}
+
+.format-tag {
+    display: inline-block;
+    background: #e9ecef;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    margin: 2px;
+}
+
+/* ========================================
    RESPONSIVE IMPROVEMENTS
    ======================================== */
 @media (max-width: 768px) {

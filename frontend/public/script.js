@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initConditionalFields();
     initFormSync();
     initEventListeners();
+    initFileHandler();
     loadHistory();
 });
 
@@ -160,6 +161,82 @@ function initConditionalFields() {
         document.getElementById('materialCercoContainer').style.display = 
             this.checked ? 'block' : 'none';
     });
+}
+
+function initFileHandler() {
+    const archivosInput = document.getElementById('archivos');
+    const archivosLista = document.getElementById('archivosLista');
+    let archivosData = [];
+
+    archivosInput.addEventListener('change', function() {
+        archivosData = Array.from(this.files);
+        actualizarListaArchivos();
+    });
+
+    function actualizarListaArchivos() {
+        if (archivosData.length === 0) {
+            archivosLista.innerHTML = '<p class="no-files">No hay archivos adjuntos</p>';
+            return;
+        }
+
+        let html = '<div class="files-grid">';
+        archivosData.forEach((file, index) => {
+            const ext = file.name.split('.').pop().toLowerCase();
+            const icon = getFileIcon(ext);
+            const size = formatFileSize(file.size);
+            
+            html += `
+                <div class="file-item" data-index="${index}">
+                    <div class="file-icon">${icon}</div>
+                    <div class="file-info">
+                        <div class="file-name" title="${file.name}">${file.name}</div>
+                        <div class="file-meta">${size} • ${ext.toUpperCase()}</div>
+                    </div>
+                    <button class="file-remove" onclick="removeFile(${index})">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+        });
+        html += '</div>';
+        archivosLista.innerHTML = html;
+    }
+
+    window.removeFile = function(index) {
+        archivosData.splice(index, 1);
+        // Recrear el FileList
+        const dt = new DataTransfer();
+        archivosData.forEach(file => dt.items.add(file));
+        archivosInput.files = dt.files;
+        actualizarListaArchivos();
+    };
+
+    actualizarListaArchivos();
+}
+
+function getFileIcon(ext) {
+    const icons = {
+        'pdf': '<i class="fas fa-file-pdf"></i>',
+        'dwg': '<i class="fas fa-drafting-compass"></i>',
+        'skp': '<i class="fas fa-cube"></i>',
+        'jpg': '<i class="fas fa-image"></i>',
+        'jpeg': '<i class="fas fa-image"></i>',
+        'png': '<i class="fas fa-image"></i>',
+        'xlsx': '<i class="fas fa-file-excel"></i>',
+        'xls': '<i class="fas fa-file-excel"></i>',
+        'ifc': '<i class="fas fa-building"></i>',
+        '3dm': '<i class="fas fa-cube"></i>',
+        'obj': '<i class="fas fa-cube"></i>',
+        'rvt': '<i class="fas fa-drafting-compass"></i>',
+        'default': '<i class="fas fa-file"></i>'
+    };
+    return icons[ext] || icons['default'];
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
 function initFormSync() {
