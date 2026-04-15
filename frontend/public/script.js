@@ -1,266 +1,770 @@
+const API_BASE = window.location.origin;
+
+let currentStep = 1;
+const totalSteps = 4;
+let currentUser = null;
+let presupuestoData = null;
+
 document.addEventListener('DOMContentLoaded', function() {
-    // Elementos del DOM
-    const form = document.getElementById('blueprintForm');
+    initAuth();
+    initWizard();
+    initConditionalFields();
+    initFormSync();
+    initEventListeners();
+    loadHistory();
+});
+
+function initAuth() {
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+        currentUser = JSON.parse(savedUser);
+        showMainApp();
+    }
+}
+
+function showMainApp() {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'flex';
+    document.getElementById('userInfo').style.display = 'flex';
+    document.getElementById('userName').textContent = currentUser.name;
+}
+
+document.getElementById('loginForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    
+    currentUser = {
+        id: 'user_' + Date.now(),
+        email: email,
+        name: email.split('@')[0],
+        estudio_id: 'estudio_001'
+    };
+    
+    localStorage.setItem('user', JSON.stringify(currentUser));
+    showMainApp();
+});
+
+document.getElementById('btnLogout').addEventListener('click', function() {
+    localStorage.removeItem('user');
+    currentUser = null;
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('mainApp').style.display = 'none';
+    document.getElementById('userInfo').style.display = 'none';
+});
+
+function initWizard() {
+    updateWizardUI();
+    
+    document.getElementById('btnPrev').addEventListener('click', prevStep);
+    document.getElementById('btnNext').addEventListener('click', nextStep);
+    document.getElementById('btnValidar').addEventListener('click', validarBlueprint);
+    document.getElementById('btnGenerar').addEventListener('click', generarPresupuesto);
+}
+
+function updateWizardUI() {
+    document.querySelectorAll('.step').forEach((step, index) => {
+        const stepNum = index + 1;
+        step.classList.toggle('active', stepNum === currentStep);
+        step.classList.toggle('completed', stepNum < currentStep);
+    });
+
+    document.querySelectorAll('.step-line').forEach((line, index) => {
+        line.classList.toggle('completed', index + 1 < currentStep);
+    });
+
+    document.querySelectorAll('.wizard-step').forEach((step, index) => {
+        step.classList.toggle('active', index + 1 === currentStep);
+    });
+
+    const btnPrev = document.getElementById('btnPrev');
+    const btnNext = document.getElementById('btnNext');
     const btnValidar = document.getElementById('btnValidar');
     const btnGenerar = document.getElementById('btnGenerar');
-    const resultadosDiv = document.getElementById('resultados');
-    const archivosInput = document.getElementById('archivos');
 
-    // Configurar fecha actual
-    const fechaActual = new Date().toISOString().split('T')[0];
+    btnPrev.style.display = currentStep > 1 ? 'inline-flex' : 'none';
     
-    // Generar IDs únicos
-    function generarId() {
-        return 'bp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    if (currentStep === totalSteps) {
+        btnNext.style.display = 'none';
+        btnValidar.style.display = 'inline-flex';
+        btnGenerar.style.display = 'inline-flex';
+    } else {
+        btnNext.style.display = 'inline-flex';
+        btnValidar.style.display = 'none';
+        btnGenerar.style.display = 'none';
     }
+}
 
-    // Obtener valores del formulario
-    function obtenerBlueprint() {
-        const instalaciones = Array.from(document.querySelectorAll('input[name="instalaciones"]:checked'))
-            .map(cb => cb.value);
-
-        return {
-            id: generarId(),
-            usuario_id: 'usuario_demo',
-            estudio_id: 'estudio_001',
-            fecha_creacion: fechaActual,
-            nombre_obra: document.getElementById('nombre_obra').value,
-            ubicacion: document.getElementById('ubicacion').value,
-            superficie_cubierta_m2: parseFloat(document.getElementById('superficie_cubierta_m2').value),
-            superficie_semicubierta_m2: 0,
-            plantas: parseInt(document.getElementById('plantas').value),
-            tiene_planos: 'aprobados',
-            dormitorios: parseInt(document.getElementById('dormitorios').value),
-            cantidad_banos: parseInt(document.getElementById('cantidad_banos').value),
-            tiene_cochera: document.getElementById('tiene_cochera').checked,
-            tipo_cochera: document.getElementById('tiene_cochera').checked ? 'cubierta' : undefined,
-            tiene_quincho: document.getElementById('tiene_quincho').checked,
-            tiene_galeria: document.getElementById('tiene_galeria').checked,
-            tiene_deck: document.getElementById('tiene_deck').checked,
-            superficie_deck_m2: document.getElementById('tiene_deck').checked ? 15 : 0,
-            cocina_equipada: true,
-            estructura: document.getElementById('estructura').value,
-            cubierta: document.getElementById('cubierta').value,
-            tiene_escalera: false,
-            categoria: document.getElementById('categoria').value,
-            factor_terminacion: parseFloat(document.getElementById('factor_terminacion').value),
-            pisos: document.getElementById('pisos').value,
-            cielorraso: 'suspendido',
-            aberturas: document.getElementById('aberturas').value,
-            revestimiento_exterior: 'revoque_fino',
-            porton_cerco: true,
-            material_cerco: 'metalico',
-            instalaciones: instalaciones,
-            calentador_agua: 'termotanque_gas',
-            tiene_cisterna: false,
-            tiene_tanque_elevado: true,
-            terreno: {
-                tipo: 'lote_propio',
-                zona_inundable: false
-            },
-            plazo_meses: parseInt(document.getElementById('plazo_meses').value),
-            modalidad: document.getElementById('modalidad').value
-        };
-    }
-
-    // Mostrar resultados
-    function mostrarResultado(tipo, titulo, mensaje, detalles = null) {
-        resultadosDiv.className = 'results-container show';
-        resultadosDiv.classList.add(`result-${tipo}`);
-
-        let html = `
-            <div class="result-title">
-                <i class="fas ${tipo === 'success' ? 'fa-check-circle' : tipo === 'error' ? 'fa-exclamation-circle' : 'fa-spinner fa-spin'}"></i>
-                ${titulo}
-            </div>
-            <p>${mensaje}</p>
-        `;
-
-        if (detalles) {
-            html += `<div class="result-details">${detalles}</div>`;
-        }
-
-        resultadosDiv.innerHTML = html;
-    }
-
-    // Mostrar detalles del presupuesto
-    function mostrarPresupuesto(presupuesto) {
-        const totalFormateado = new Intl.NumberFormat('es-AR', {
-            style: 'currency',
-            currency: 'ARS'
-        }).format(presupuesto.total_estimado);
-
-        let html = `
-            <div class="result-title">
-                <i class="fas fa-check-circle"></i>
-                Presupuesto Generado Exitosamente
-            </div>
-            <p>El presupuesto ha sido generado correctamente.</p>
-            
-            <div class="result-details">
-                <div class="result-item">
-                    <h4>Resumen</h4>
-                    <p><strong>Obra:</strong> ${presupuesto.blueprint.nombre_obra}</p>
-                    <p><strong>Total estimado:</strong> ${totalFormateado}</p>
-                    <p><strong>Versión:</strong> ${presupuesto.version}</p>
-                    <p><strong>Fecha generación:</strong> ${presupuesto.fecha_generacion}</p>
-                </div>
-        `;
-
-        // Mostrar algunos items de ejemplo
-        if (presupuesto.items && presupuesto.items.length > 0) {
-            html += `<div class="result-item">
-                <h4>Items del presupuesto (${presupuesto.items.length} total)</h4>`;
-            
-            // Mostrar primeros 5 items
-            const itemsMostrar = presupuesto.items.slice(0, 5);
-            itemsMostrar.forEach(item => {
-                const confianzaIcon = item.confianza === 'alta' ? 'fa-check-circle' : 
-                                    item.confianza === 'media' ? 'fa-exclamation-circle' : 'fa-question-circle';
-                const confianzaColor = item.confianza === 'alta' ? 'success' : 
-                                     item.confianza === 'media' ? 'warning' : 'error';
-                
-                html += `
-                    <div style="margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 4px;">
-                        <strong>${item.descripcion}</strong>
-                        <div style="display: flex; justify-content: space-between; margin-top: 5px;">
-                            <span>Cantidad: ${item.cantidad} ${item.unidad}</span>
-                            <span>Subtotal: $${item.subtotal.toLocaleString('es-AR')}</span>
-                            <span><i class="fas ${confianzaIcon}" style="color: var(--${confianzaColor}-color)"></i> ${item.confianza}</span>
-                        </div>
-                    </div>
-                `;
-            });
-
-            if (presupuesto.items.length > 5) {
-                html += `<p>... y ${presupuesto.items.length - 5} items más</p>`;
-            }
-
-            html += `</div>`;
-        }
-
-        // Estado del caché
-        if (presupuesto.estado_cache) {
-            html += `<div class="result-item">
-                <h4>Estado de los precios</h4>
-                <p><strong>Precios frescos:</strong> ${presupuesto.estado_cache.frescos || 0}</p>
-                <p><strong>Precios del caché:</strong> ${presupuesto.estado_cache.cache || 0}</p>
-                <p><strong>Precios desactualizados:</strong> ${presupuesto.estado_cache.desactualizados || 0}</p>
-            </div>`;
-        }
-
-        html += `</div>`;
-        
-        resultadosDiv.className = 'results-container show result-success';
-        resultadosDiv.innerHTML = html;
-    }
-
-    // Validar blueprint
-    async function validarBlueprint() {
-        const blueprint = obtenerBlueprint();
-        
-        mostrarResultado('loading', 'Validando...', 'Validando los datos del blueprint...');
-
-        try {
-            const response = await fetch('/api/blueprint/validate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(blueprint)
-            });
-
-            const result = await response.json();
-
-            if (result.valido) {
-                mostrarResultado('success', 'Blueprint válido', 'Todos los campos son correctos.');
-            } else {
-                let erroresHtml = '<ul>';
-                result.errores.forEach(error => {
-                    erroresHtml += `<li>${error}</li>`;
-                });
-                erroresHtml += '</ul>';
-                
-                mostrarResultado('error', 'Blueprint inválido', 'Se encontraron errores en los datos:', erroresHtml);
-            }
-        } catch (error) {
-            mostrarResultado('error', 'Error de conexión', 'No se pudo conectar con el servidor.');
-            console.error('Error validando:', error);
+function nextStep() {
+    if (validateCurrentStep()) {
+        if (currentStep < totalSteps) {
+            currentStep++;
+            updateWizardUI();
         }
     }
+}
 
-    // Generar presupuesto
-    async function generarPresupuesto() {
-        const blueprint = obtenerBlueprint();
-        const archivos = archivosInput.files;
-        
-        mostrarResultado('loading', 'Generando presupuesto...', 'Esto puede tomar unos segundos...');
+function prevStep() {
+    if (currentStep > 1) {
+        currentStep--;
+        updateWizardUI();
+    }
+}
 
-        // Preparar datos para enviar
-        const formData = new FormData();
-        formData.append('blueprint', JSON.stringify(blueprint));
-        
-        for (let i = 0; i < archivos.length; i++) {
-            formData.append('archivos', archivos[i]);
+function validateCurrentStep() {
+    const currentStepEl = document.querySelector(`.wizard-step[data-step="${currentStep}"]`);
+    const requiredFields = currentStepEl.querySelectorAll('[required]');
+    let isValid = true;
+
+    requiredFields.forEach(field => {
+        if (!field.value || (field.type === 'checkbox' && !field.checked && !isAnyChecked(field.name))) {
+            isValid = false;
+            field.classList.add('error');
+        } else {
+            field.classList.remove('error');
         }
+    });
 
-        try {
-            // Enviar como JSON (archivos se ignoran por ahora)
-            const response = await fetch('/api/presupuesto/generar', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    blueprint: blueprint,
-                    archivos: [] // Por ahora no enviamos archivos reales
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.exito) {
-                mostrarPresupuesto(result.presupuesto);
-            } else {
-                mostrarResultado('error', 'Error generando presupuesto', 
-                    'No se pudo generar el presupuesto.', 
-                    result.errores ? result.errores.join(', ') : 'Error desconocido');
-            }
-        } catch (error) {
-            mostrarResultado('error', 'Error de conexión', 'No se pudo conectar con el servidor.');
-            console.error('Error generando:', error);
-        }
+    if (!isValid) {
+        showToast('Por favor, completá todos los campos requeridos', 'error');
     }
 
-    // Event listeners
-    btnValidar.addEventListener('click', validarBlueprint);
-    btnGenerar.addEventListener('click', generarPresupuesto);
+    return isValid;
+}
 
-    // Sincronizar categoría y factor de terminación
+function isAnyChecked(name) {
+    return document.querySelectorAll(`[name="${name}"]:checked`).length > 0;
+}
+
+function initConditionalFields() {
+    document.getElementById('tiene_deck').addEventListener('change', function() {
+        document.getElementById('deckSection').style.display = this.checked ? 'grid' : 'none';
+    });
+
+    document.getElementById('estructura').addEventListener('change', function() {
+        document.getElementById('steelFrameSection').style.display = 
+            this.value === 'steel_frame' ? 'block' : 'none';
+    });
+
+    document.getElementById('plantas').addEventListener('change', function() {
+        const opciones = document.getElementById('plantasOpciones');
+        opciones.style.display = parseInt(this.value) > 1 ? 'grid' : 'none';
+    });
+
+    document.getElementById('tiene_escalera').addEventListener('change', function() {
+        document.getElementById('tipoEscaleraContainer').style.display = 
+            this.checked ? 'block' : 'none';
+    });
+
+    document.getElementById('porton_cerco').addEventListener('change', function() {
+        document.getElementById('materialCercoContainer').style.display = 
+            this.checked ? 'block' : 'none';
+    });
+}
+
+function initFormSync() {
     const categoriaSelect = document.getElementById('categoria');
-    const factorSelect = document.getElementById('factor_terminacion');
+    const factorDisplay = document.getElementById('factor_terminacion_display');
+
+    const factores = {
+        'economico': '1.0',
+        'estandar': '1.35',
+        'premium': '1.8',
+        'lujo': '2.5'
+    };
 
     categoriaSelect.addEventListener('change', function() {
-        const factores = {
-            'economico': '1.0',
-            'estandar': '1.35',
-            'premium': '1.8',
-            'lujo': '2.5'
-        };
-        factorSelect.value = factores[this.value];
+        factorDisplay.value = factores[this.value];
     });
+}
 
-    // Sincronizar factor con categoría (al revés)
-    factorSelect.addEventListener('change', function() {
-        const categorias = {
-            '1.0': 'economico',
-            '1.35': 'estandar',
-            '1.8': 'premium',
-            '2.5': 'lujo'
-        };
-        if (categorias[this.value]) {
-            categoriaSelect.value = categorias[this.value];
+function initEventListeners() {
+    document.getElementById('blueprintForm').addEventListener('reset', function(e) {
+        setTimeout(() => {
+            updateWizardUI();
+            initConditionalFields();
+            currentStep = 1;
+            updateWizardUI();
+        }, 0);
+    });
+}
+
+function generarId() {
+    return 'bp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+function obtenerBlueprint() {
+    const instalaciones = Array.from(document.querySelectorAll('input[name="instalaciones"]:checked'))
+        .map(cb => cb.value);
+
+    return {
+        id: generarId(),
+        usuario_id: currentUser?.id || 'usuario_demo',
+        estudio_id: currentUser?.estudio_id || 'estudio_001',
+        fecha_creacion: new Date().toISOString().split('T')[0],
+        escenarios: document.getElementById('escenarios').checked,
+        
+        nombre_obra: document.getElementById('nombre_obra').value,
+        ubicacion: document.getElementById('ubicacion').value,
+        superficie_cubierta_m2: parseFloat(document.getElementById('superficie_cubierta_m2').value),
+        superficie_semicubierta_m2: parseFloat(document.getElementById('superficie_semicubierta_m2').value) || 0,
+        plantas: parseInt(document.getElementById('plantas').value),
+        tiene_planos: document.getElementById('tiene_planos').value,
+        
+        dormitorios: parseInt(document.getElementById('dormitorios').value),
+        cantidad_banos: parseInt(document.getElementById('cantidad_banos').value),
+        tiene_cochera: document.getElementById('tiene_cochera').checked,
+        tipo_cochera: document.getElementById('tiene_cochera').checked ? 'cubierta' : undefined,
+        tiene_quincho: document.getElementById('tiene_quincho').checked,
+        tiene_galeria: document.getElementById('tiene_galeria').checked,
+        tiene_deck: document.getElementById('tiene_deck').checked,
+        superficie_deck_m2: document.getElementById('tiene_deck').checked ? 
+            parseFloat(document.getElementById('superficie_deck_m2').value) || 15 : 0,
+        cocina_equipada: document.getElementById('cocina_equipada').checked,
+        
+        estructura: document.getElementById('estructura').value,
+        panel_espesor: document.getElementById('estructura').value === 'steel_frame' ? 
+            parseInt(document.getElementById('panel_espesor').value) : undefined,
+        cubierta: document.getElementById('cubierta').value,
+        tiene_escalera: parseInt(document.getElementById('plantas').value) > 1 && 
+            document.getElementById('tiene_escalera').checked,
+        tipo_escalera: parseInt(document.getElementById('plantas').value) > 1 ? 
+            document.getElementById('tipo_escalera').value : undefined,
+        
+        categoria: document.getElementById('categoria').value,
+        factor_terminacion: parseFloat(document.getElementById('factor_terminacion_display').value),
+        pisos: document.getElementById('pisos').value,
+        cielorraso: document.getElementById('cielorraso').value,
+        aberturas: document.getElementById('aberturas').value,
+        revestimiento_exterior: document.getElementById('revestimiento_exterior').value,
+        porton_cerco: document.getElementById('porton_cerco').checked,
+        material_cerco: document.getElementById('porton_cerco').checked ? 
+            document.getElementById('material_cerco').value : undefined,
+        
+        instalaciones: instalaciones,
+        calentador_agua: document.getElementById('calentador_agua').value,
+        tiene_cisterna: document.getElementById('tiene_cisterna').checked,
+        tiene_tanque_elevado: document.getElementById('tiene_tanque_elevado').checked,
+        
+        terreno: {
+            tipo: document.getElementById('terreno_tipo').value,
+            desnivel_metros: parseFloat(document.getElementById('desnivel_metros').value) || 0,
+            zona_inundable: document.getElementById('terreno_zona_inundable').checked,
+            requiere_demolicion: document.getElementById('requiere_demolicion').checked
+        },
+        
+        plazo_meses: parseInt(document.getElementById('plazo_meses').value),
+        modalidad: document.getElementById('modalidad').value,
+        observaciones: document.getElementById('observaciones').value
+    };
+}
+
+async function validarBlueprint() {
+    const blueprint = obtenerBlueprint();
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/blueprint/validate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(blueprint)
+        });
+
+        const result = await response.json();
+
+        if (result.valido) {
+            showToast('Blueprint válido ✓', 'success');
+        } else {
+            let erroresHtml = '<ul>';
+            result.errores.forEach(error => {
+                erroresHtml += `<li>${error}</li>`;
+            });
+            erroresHtml += '</ul>';
+            showToast('Blueprint inválido. Verificá los campos.', 'error');
         }
+    } catch (error) {
+        showToast('Error de conexión con el servidor', 'error');
+        console.error('Error validando:', error);
+    }
+}
+
+async function generarPresupuesto() {
+    const blueprint = obtenerBlueprint();
+    
+    if (!validateCurrentStep()) return;
+
+    const progressOverlay = document.getElementById('progressOverlay');
+    progressOverlay.style.display = 'flex';
+    
+    updateProgressStep(1, 'running', 'Extrayendo datos de archivos...');
+
+    try {
+        updateProgressStep(1, 'completed', 'Datos extraídos');
+        updateProgressStep(2, 'running', 'Buscando precios actualizados...');
+
+        const response = await fetch(`${API_BASE}/api/presupuesto/generar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                blueprint: blueprint,
+                archivos: []
+            })
+        });
+
+        updateProgressStep(2, 'completed', 'Precios obtenidos');
+        updateProgressStep(3, 'running', 'Generando presupuesto...');
+
+        const result = await response.json();
+
+        updateProgressStep(3, 'completed', 'Presupuesto generado');
+
+        setTimeout(() => {
+            progressOverlay.style.display = 'none';
+            resetProgressUI();
+
+            if (result.exito) {
+                presupuestoData = result.presupuesto;
+                if (result.presupuesto.comparativo) {
+                    mostrarComparativo(result.presupuesto.comparativo);
+                } else {
+                    mostrarPresupuesto(result.presupuesto);
+                }
+                saveToHistory(blueprint, result.presupuesto);
+            } else {
+                showToast('Error generando presupuesto', 'error');
+                mostrarError(result.errores);
+            }
+        }, 500);
+
+    } catch (error) {
+        progressOverlay.style.display = 'none';
+        resetProgressUI();
+        showToast('Error de conexión con el servidor', 'error');
+        console.error('Error generando:', error);
+    }
+}
+
+function updateProgressStep(step, status, message) {
+    const stepEl = document.querySelector(`.progress-step[data-step="${step}"]`);
+    if (stepEl) {
+        const icon = stepEl.querySelector('i');
+        stepEl.className = `progress-step ${status}`;
+        
+        if (status === 'running') {
+            icon.className = 'fas fa-spinner fa-spin';
+        } else if (status === 'completed') {
+            icon.className = 'fas fa-check-circle';
+        } else if (status === 'error') {
+            icon.className = 'fas fa-exclamation-circle';
+        }
+        
+        stepEl.lastElementChild.textContent = message;
+    }
+}
+
+function resetProgressUI() {
+    document.querySelectorAll('.progress-step').forEach(step => {
+        step.className = 'progress-step';
+        step.querySelector('i').className = 'fas fa-circle';
+    });
+}
+
+function mostrarPresupuesto(presupuesto) {
+    const resultadosDiv = document.getElementById('resultados');
+    
+    const totalFormateado = formatCurrency(presupuesto.total_estimado);
+    const fechaFormateada = new Date(presupuesto.fecha).toLocaleDateString('es-AR', {
+        year: 'numeric', month: 'long', day: 'numeric'
     });
 
-    // Mostrar mensaje de bienvenida
+    let html = `
+        <div class="result-header">
+            <div class="result-title">
+                <i class="fas fa-check-circle"></i>
+                Presupuesto Generado
+            </div>
+            <p>${presupuesto.obra} • ${fechaFormateada}</p>
+        </div>
+        
+        <div class="result-summary-card">
+            <div class="summary-main">
+                <span class="summary-label">TOTAL ESTIMADO</span>
+                <span class="summary-value">${totalFormateado}</span>
+            </div>
+            <div class="summary-details">
+                <div class="summary-item">
+                    <span class="label">Superficie</span>
+                    <span class="value">${presupuesto.superficie_m2} m²</span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">Estructura</span>
+                    <span class="value">${presupuesto.estructura}</span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">Categoría</span>
+                    <span class="value">${presupuesto.categoria}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="cache-status-bar">
+            <span class="cache-badge fresh"><i class="fas fa-check"></i> ${presupuesto.precios_frescos} precios frescos</span>
+            <span class="cache-badge cached"><i class="fas fa-clock"></i> ${presupuesto.precios_cache} del caché</span>
+            ${presupuesto.precios_vencidos > 0 ? `<span class="cache-badge expired"><i class="fas fa-exclamation"></i> ${presupuesto.precios_vencidos} vencidos</span>` : ''}
+        </div>
+
+        <div class="items-section">
+            <h4><i class="fas fa-list"></i> Detalle del Presupuesto</h4>
+            <div class="table-container">
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th>Rubro</th>
+                            <th>Descripción</th>
+                            <th>Cantidad</th>
+                            <th>Precio Unit.</th>
+                            <th>Subtotal</th>
+                            <th>Confianza</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+    
+    presupuesto.items.forEach(item => {
+        const confianzaClass = `conf-${item.confianza || 'media'}`;
+        html += `
+            <tr class="${item.precio_desactualizado ? 'row-warning' : ''}">
+                <td><strong>${item.rubro || '-'}</strong></td>
+                <td>${item.descripcion || '-'}</td>
+                <td>${item.cantidad ? item.cantidad.toLocaleString('es-AR') : '-'}</td>
+                <td>${item.precio_unitario ? formatCurrency(item.precio_unitario) : '-'}</td>
+                <td><strong>${item.subtotal ? formatCurrency(item.subtotal) : '-'}</strong></td>
+                <td><span class="confianza-badge ${confianzaClass}">${item.confianza || 'media'}</span></td>
+            </tr>
+        `;
+    });
+
+    html += `
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="downloads-section">
+            <h4><i class="fas fa-download"></i> Descargar</h4>
+            <div class="download-buttons">
+                <button class="btn-download excel" onclick="downloadExcel()">
+                    <i class="fas fa-file-excel"></i> Excel
+                </button>
+                <button class="btn-download pdf" onclick="downloadPDF()">
+                    <i class="fas fa-file-pdf"></i> PDF
+                </button>
+                <button class="btn-download json" onclick="downloadJSON()">
+                    <i class="fas fa-file-code"></i> JSON
+                </button>
+            </div>
+        </div>
+    `;
+
+    resultadosDiv.innerHTML = html;
+    resultadosDiv.className = 'results-container show result-success';
+    resultadosDiv.scrollIntoView({ behavior: 'smooth' });
+}
+
+function mostrarComparativo(comparativo) {
+    const resultadosDiv = document.getElementById('resultados');
+    
+    const fechaFormateada = new Date(comparativo.fecha).toLocaleDateString('es-AR', {
+        year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+    let html = `
+        <div class="result-header">
+            <div class="result-title">
+                <i class="fas fa-check-circle"></i>
+                Comparativa de Escenarios
+            </div>
+            <p>${comparativo.obra} • ${fechaFormateada}</p>
+        </div>
+
+        <div class="comparative-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Categoría</th>
+                        <th>Factor</th>
+                        <th>Total Estimado</th>
+                        <th>vs Económico</th>
+                        <th>Diferencia</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    const baseTotal = comparativo.escenarios[0]?.total_estimado || 1;
+
+    comparativo.escenarios.forEach((escenario, index) => {
+        const diferencia = baseTotal > 0 ? ((escenario.total_estimado - baseTotal) / baseTotal * 100).toFixed(1) : 0;
+        const isSelected = index === 2;
+        html += `
+            <tr class="${isSelected ? 'selected' : ''}">
+                <td><strong>${escenario.categoria}</strong></td>
+                <td>x${escenario.factor}</td>
+                <td><strong>${formatCurrency(escenario.total_estimado)}</strong></td>
+                <td>${escenario.diferencia_vs_economico}</td>
+                <td class="${diferencia > 0 ? 'text-success' : 'text-muted'}">${diferencia > 0 ? '+' : ''}${diferencia}%</td>
+            </tr>
+        `;
+    });
+
+    html += `
+                </tbody>
+            </table>
+        </div>
+
+        ${comparativo.escenarios[0]?.items_que_mas_cambian?.length > 0 ? `
+        <div class="comparative-notes">
+            <h5><i class="fas fa-info-circle"></i> Items que más cambian entre categorías:</h5>
+            <ul>
+                ${comparativo.escenarios[0].items_que_mas_cambian.map(item => `<li>${item}</li>`).join('')}
+            </ul>
+        </div>
+        ` : ''}
+
+        <div class="downloads-section">
+            <h4><i class="fas fa-download"></i> Descargar</h4>
+            <div class="download-buttons">
+                <button class="btn-download excel" onclick="downloadExcel()">
+                    <i class="fas fa-file-excel"></i> Excel Comparativo
+                </button>
+                <button class="btn-download json" onclick="downloadJSON()">
+                    <i class="fas fa-file-code"></i> JSON
+                </button>
+            </div>
+        </div>
+    `;
+
+    resultadosDiv.innerHTML = html;
+    resultadosDiv.className = 'results-container show result-success';
+}
+
+function mostrarError(errores) {
+    const resultadosDiv = document.getElementById('resultados');
+    resultadosDiv.innerHTML = `
+        <div class="result-error">
+            <div class="result-title">
+                <i class="fas fa-exclamation-circle"></i>
+                Error generando presupuesto
+            </div>
+            <p>No se pudo generar el presupuesto.</p>
+            <div class="error-details">
+                <ul>
+                    ${(errores || ['Error desconocido']).map(e => `<li>${e}</li>`).join('')}
+                </ul>
+            </div>
+        </div>
+    `;
+    resultadosDiv.className = 'results-container show result-error';
+}
+
+function formatCurrency(value) {
+    return new Intl.NumberFormat('es-AR', {
+        style: 'currency',
+        currency: 'ARS'
+    }).format(value);
+}
+
+function downloadExcel() {
+    if (!presupuestoData) {
+        showToast('Primero generá un presupuesto', 'error');
+        return;
+    }
+    
+    fetch(`${API_BASE}/api/presupuesto/descargar/excel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ presupuesto: presupuestoData })
+    })
+    .then(r => r.blob())
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `presupuesto_${presupuestoData.obra.replace(/\s+/g, '_')}_${Date.now()}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        showToast('Excel descargado', 'success');
+    })
+    .catch(err => {
+        downloadFallback('xlsx', presupuestoData);
+    });
+}
+
+function downloadPDF() {
+    if (!presupuestoData) {
+        showToast('Primero generá un presupuesto', 'error');
+        return;
+    }
+    
+    fetch(`${API_BASE}/api/presupuesto/descargar/pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ presupuesto: presupuestoData })
+    })
+    .then(r => r.blob())
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `presupuesto_${presupuestoData.obra.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        showToast('PDF descargado', 'success');
+    })
+    .catch(err => {
+        showToast('Error generando PDF. Probá descargando JSON.', 'error');
+    });
+}
+
+function downloadJSON() {
+    if (!presupuestoData) {
+        showToast('Primero generá un presupuesto', 'error');
+        return;
+    }
+    
+    const dataStr = JSON.stringify(presupuestoData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `presupuesto_${presupuestoData.obra.replace(/\s+/g, '_')}_${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('JSON descargado', 'success');
+}
+
+function downloadFallback(format, data) {
+    const html = generarHTMLPresupuesto(data);
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `presupuesto_${data.obra.replace(/\s+/g, '_')}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Archivo HTML descargado como alternativa', 'info');
+}
+
+function generarHTMLPresupuesto(data) {
+    return `<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Presupuesto - ${data.obra}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        h1 { color: #333; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background: #f5f5f5; }
+        .total { font-size: 1.5em; font-weight: bold; color: #2c3e50; }
+        .summary { background: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Presupuesto de Construcción</h1>
+    <p><strong>Obra:</strong> ${data.obra}</p>
+    <p><strong>Fecha:</strong> ${data.fecha}</p>
+    <p><strong>Superficie:</strong> ${data.superficie_m2} m²</p>
+    <p><strong>Estructura:</strong> ${data.estructura}</p>
+    <p><strong>Categoría:</strong> ${data.categoria}</p>
+    
+    <div class="summary">
+        <p class="total">TOTAL ESTIMADO: ${formatCurrency(data.total_estimado)}</p>
+    </div>
+    
+    <h2>Detalle</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Rubro</th>
+                <th>Descripción</th>
+                <th>Cantidad</th>
+                <th>Precio Unit.</th>
+                <th>Subtotal</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${data.items.map(item => `
+            <tr>
+                <td>${item.rubro || '-'}</td>
+                <td>${item.descripcion || '-'}</td>
+                <td>${item.cantidad || '-'}</td>
+                <td>${item.precio_unitario ? formatCurrency(item.precio_unitario) : '-'}</td>
+                <td>${item.subtotal ? formatCurrency(item.subtotal) : '-'}</td>
+            </tr>
+            `).join('')}
+        </tbody>
+    </table>
+</body>
+</html>`;
+}
+
+async function loadHistory() {
+    try {
+        const response = await fetch(`${API_BASE}/api/presupuestos`);
+        const data = await response.json();
+        
+        const historyList = document.getElementById('historyList');
+        
+        if (data.presupuestos && data.presupuestos.length > 0) {
+            historyList.innerHTML = data.presupuestos.slice(0, 5).map(item => `
+                <div class="history-item" onclick="loadPresupuesto('${item.id}')">
+                    <strong>${item.nombre_obra}</strong>
+                    <span>${item.superficie_m2} m² • ${formatCurrency(item.total_estimado)}</span>
+                    <small>${item.fecha}</small>
+                </div>
+            `).join('');
+        } else {
+            historyList.innerHTML = '<p class="no-history">Sin presupuestos anteriores</p>';
+        }
+    } catch (error) {
+        document.getElementById('historyList').innerHTML = '<p class="no-history">Error cargando historial</p>';
+    }
+}
+
+function saveToHistory(blueprint, presupuesto) {
+    const history = JSON.parse(localStorage.getItem('presupuestoHistory') || '[]');
+    history.unshift({
+        id: presupuesto.id || blueprint.id,
+        nombre_obra: blueprint.nombre_obra,
+        fecha: new Date().toLocaleDateString('es-AR'),
+        superficie_m2: blueprint.superficie_cubierta_m2,
+        total_estimado: presupuesto.total_estimado,
+        estructura: blueprint.estructura,
+        categoria: blueprint.categoria
+    });
+    
+    localStorage.setItem('presupuestoHistory', JSON.stringify(history.slice(0, 10)));
+    loadHistory();
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check' : type === 'error' ? 'exclamation' : 'info'}"></i> ${message}`;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => toast.classList.add('show'), 10);
     setTimeout(() => {
-        mostrarResultado('success', 'Bienvenido', 'Completa el formulario para generar un presupuesto de construcción.');
-    }, 1000);
-});
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}

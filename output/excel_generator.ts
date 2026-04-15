@@ -205,17 +205,19 @@ function generateHtml(
 }
 
 export async function generarExcel(
-  presupuesto: Presupuesto,
-  usuarioId: string,
+  presupuesto: Presupuesto | any,
+  obraNombre: string,
   comparativo?: PresupuestoComparativo,
   versiones?: VersionPresupuesto[]
 ): Promise<string> {
   ensureDir(OUTPUT_DIR);
+  const usuarioId = presupuesto.usuario_id || 'general';
   const usuarioDir = path.join(OUTPUT_DIR, usuarioId);
   ensureDir(usuarioDir);
 
   const timestamp = new Date().toISOString().replace(/:/g, "-");
-  const filename = `${presupuesto.obra.replace(/\s+/g, "_")}_${timestamp}.html`;
+  const safeName = obraNombre.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
+  const filename = `${safeName}_${timestamp}.html`;
   const filepath = path.join(usuarioDir, filename);
 
   const html = generateHtml(presupuesto, comparativo, versiones);

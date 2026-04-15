@@ -12,195 +12,420 @@
         <header>
             <h1><i class="fas fa-home"></i> Sistema Multi-Agente de Presupuestos</h1>
             <p class="subtitle">Genera presupuestos de construcción automatizados con IA</p>
+            <div id="userInfo" class="user-info" style="display: none;">
+                <span id="userName"></span>
+                <button id="btnLogout" class="btn-logout"><i class="fas fa-sign-out-alt"></i></button>
+            </div>
         </header>
 
-        <div class="content">
+        <div id="loginScreen" class="login-screen">
+            <div class="login-card">
+                <h2><i class="fas fa-user-circle"></i> Iniciar Sesión</h2>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="loginEmail">Email</label>
+                        <input type="email" id="loginEmail" required placeholder="tu@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Contraseña</label>
+                        <input type="password" id="loginPassword" required placeholder="••••••••">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-sign-in-alt"></i> Ingresar
+                    </button>
+                    <p class="login-hint">Usa cualquier email y contraseña para probar</p>
+                </form>
+            </div>
+        </div>
+
+        <div id="mainApp" class="content" style="display: none;">
             <div class="form-container">
-                <h2><i class="fas fa-file-alt"></i> Formulario de Blueprint</h2>
-                <p class="form-description">Completa los datos del proyecto para generar un presupuesto detallado.</p>
-                
+                <div class="progress-bar">
+                    <div class="progress-steps">
+                        <div class="step active" data-step="1">
+                            <div class="step-number">1</div>
+                            <div class="step-label">Proyecto</div>
+                        </div>
+                        <div class="step-line"></div>
+                        <div class="step" data-step="2">
+                            <div class="step-number">2</div>
+                            <div class="step-label">Constructivo</div>
+                        </div>
+                        <div class="step-line"></div>
+                        <div class="step" data-step="3">
+                            <div class="step-number">3</div>
+                            <div class="step-label">Terminaciones</div>
+                        </div>
+                        <div class="step-line"></div>
+                        <div class="step" data-step="4">
+                            <div class="step-number">4</div>
+                            <div class="step-label">Instalaciones</div>
+                        </div>
+                    </div>
+                </div>
+
                 <form id="blueprintForm">
-                    <div class="form-section">
-                        <h3><i class="fas fa-info-circle"></i> Información Básica</h3>
-                        <div class="form-grid">
-                            <div class="form-group">
-                                <label for="nombre_obra">Nombre de la Obra *</label>
-                                <input type="text" id="nombre_obra" name="nombre_obra" required placeholder="Ej: Casa Pilar">
+                    <div class="wizard-content">
+                        <div class="wizard-step active" data-step="1">
+                            <h2><i class="fas fa-file-alt"></i> Datos del Proyecto</h2>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="nombre_obra">Nombre de la Obra *</label>
+                                    <input type="text" id="nombre_obra" name="nombre_obra" required placeholder="Ej: Casa Pilar">
+                                </div>
+                                <div class="form-group">
+                                    <label for="ubicacion">Ubicación *</label>
+                                    <input type="text" id="ubicacion" name="ubicacion" required placeholder="Ej: Pilar, Buenos Aires">
+                                </div>
+                                <div class="form-group">
+                                    <label for="superficie_cubierta_m2">Superficie Cubierta (m²) *</label>
+                                    <input type="number" id="superficie_cubierta_m2" name="superficie_cubierta_m2" required min="20" max="1000" value="120">
+                                </div>
+                                <div class="form-group">
+                                    <label for="superficie_semicubierta_m2">Superficie Semicubierta (m²)</label>
+                                    <input type="number" id="superficie_semicubierta_m2" name="superficie_semicubierta_m2" min="0" max="500" value="20">
+                                </div>
+                                <div class="form-group">
+                                    <label for="plantas">Plantas *</label>
+                                    <select id="plantas" name="plantas" required>
+                                        <option value="1" selected>1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="tiene_planos">Planos Disponibles *</label>
+                                    <select id="tiene_planos" name="tiene_planos" required>
+                                        <option value="aprobados">Aprobados</option>
+                                        <option value="anteproyecto">Anteproyecto</option>
+                                        <option value="sin_planos" selected>Sin planos</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div class="form-group">
-                                <label for="ubicacion">Ubicación *</label>
-                                <input type="text" id="ubicacion" name="ubicacion" required placeholder="Ej: Pilar, Buenos Aires">
+
+                            <h3><i class="fas fa-ruler-combined"></i> Distribución</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="dormitorios">Dormitorios *</label>
+                                    <input type="number" id="dormitorios" name="dormitorios" required min="1" max="10" value="3">
+                                </div>
+                                <div class="form-group">
+                                    <label for="cantidad_banos">Baños *</label>
+                                    <input type="number" id="cantidad_banos" name="cantidad_banos" required min="1" max="6" value="2">
+                                </div>
+                                <div class="form-group checkbox-inline">
+                                    <label><input type="checkbox" id="tiene_cochera" name="tiene_cochera" checked> Cochera</label>
+                                </div>
+                                <div class="form-group checkbox-inline">
+                                    <label><input type="checkbox" id="tiene_quincho" name="tiene_quincho"> Quincho</label>
+                                </div>
+                                <div class="form-group checkbox-inline">
+                                    <label><input type="checkbox" id="tiene_galeria" name="tiene_galeria" checked> Galería</label>
+                                </div>
+                                <div class="form-group checkbox-inline">
+                                    <label><input type="checkbox" id="tiene_deck" name="tiene_deck"> Deck</label>
+                                </div>
                             </div>
-                            <div class="form-group">
-                                <label for="superficie_cubierta_m2">Superficie Cubierta (m²) *</label>
-                                <input type="number" id="superficie_cubierta_m2" name="superficie_cubierta_m2" required min="20" max="1000" value="120">
+
+                            <div id="deckSection" class="form-grid conditional-field" style="display: none;">
+                                <div class="form-group">
+                                    <label for="superficie_deck_m2">Superficie Deck (m²)</label>
+                                    <input type="number" id="superficie_deck_m2" name="superficie_deck_m2" min="5" max="200" value="15">
+                                </div>
                             </div>
+
+                            <h3><i class="fas fa-map-marked-alt"></i> Terreno</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="terreno_tipo">Tipo de Terreno *</label>
+                                    <select id="terreno_tipo" name="terreno_tipo" required>
+                                        <option value="lote_propio" selected>Lote propio</option>
+                                        <option value="barrio_cerrado">Barrio Cerrado</option>
+                                        <option value="country">Country</option>
+                                        <option value="ph">PH</option>
+                                        <option value="otro">Otro</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="desnivel_metros">Desnivel (metros)</label>
+                                    <input type="number" id="desnivel_metros" name="desnivel_metros" min="0" max="10" step="0.1" value="0">
+                                    <small>Si hay desnivel > 1m, se suma movimiento de suelos</small>
+                                </div>
+                                <div class="form-group checkbox-inline">
+                                    <label><input type="checkbox" id="terreno_zona_inundable" name="terreno_zona_inundable"> Zona Inundable</label>
+                                    <small>Si está marcada, se suma hidrofuga y pilotes</small>
+                                </div>
+                                <div class="form-group checkbox-inline">
+                                    <label><input type="checkbox" id="requiere_demolicion" name="requiere_demolicion"> Requiere Demolición</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="wizard-step" data-step="2">
+                            <h2><i class="fas fa-building"></i> Sistema Constructivo</h2>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="estructura">Estructura *</label>
+                                    <select id="estructura" name="estructura" required>
+                                        <option value="albanileria" selected>Albañilería</option>
+                                        <option value="steel_frame">Steel Frame</option>
+                                        <option value="hormigon_armado">Hormigón Armado</option>
+                                        <option value="madera">Madera</option>
+                                        <option value="mixto">Mixto</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="cubierta">Cubierta *</label>
+                                    <select id="cubierta" name="cubierta" required>
+                                        <option value="chapa_acanalada" selected>Chapa Acanalada</option>
+                                        <option value="chapa_trapezoidal">Chapa Trapezoidal</option>
+                                        <option value="membrana_losa">Membrana Losa</option>
+                                        <option value="teja_ceramica">Teja Cerámica</option>
+                                        <option value="techo_verde">Techo Verde</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="revestimiento_exterior">Revestimiento Exterior *</label>
+                                    <select id="revestimiento_exterior" name="revestimiento_exterior" required>
+                                        <option value="revoque_fino" selected>Revoque Fino</option>
+                                        <option value="piedra">Piedra</option>
+                                        <option value="ladrillo_visto">Ladrillo Visto</option>
+                                        <option value="simil_piedra">Simil Piedra</option>
+                                        <option value="chapa">Chapa</option>
+                                        <option value="mixto">Mixto</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="cielorraso">Cielorraso *</label>
+                                    <select id="cielorraso" name="cielorraso" required>
+                                        <option value="suspendido" selected>Suspendido</option>
+                                        <option value="aplicado">Aplicado</option>
+                                        <option value="madera">Madera</option>
+                                        <option value="a_la_vista">A la vista</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div id="steelFrameSection" class="conditional-field" style="display: none;">
+                                <h3><i class="fas fa-layer-group"></i> Detalles Steel Frame</h3>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label for="panel_espesor">Espesor del Panel *</label>
+                                        <select id="panel_espesor" name="panel_espesor">
+                                            <option value="89">89 mm (Standard)</option>
+                                            <option value="140">140 mm (Alta aislación)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="plantasOpciones" class="form-grid" style="display: none;">
+                                <div class="form-group checkbox-inline">
+                                    <label><input type="checkbox" id="tiene_escalera" name="tiene_escalera"> Tiene Escalera</label>
+                                </div>
+                                <div class="form-group conditional-field" id="tipoEscaleraContainer" style="display: none;">
+                                    <label for="tipo_escalera">Tipo de Escalera</label>
+                                    <select id="tipo_escalera" name="tipo_escalera">
+                                        <option value="hormigon">Hormigón</option>
+                                        <option value="metalica">Metálica</option>
+                                        <option value="madera">Madera</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <h3><i class="fas fa-fence"></i> Cerco y Portón</h3>
+                            <div class="form-grid">
+                                <div class="form-group checkbox-inline">
+                                    <label><input type="checkbox" id="porton_cerco" name="porton_cerco" checked> Cerco y Portón</label>
+                                </div>
+                                <div class="form-group conditional-field" id="materialCercoContainer" style="display: none;">
+                                    <label for="material_cerco">Material del Cerco</label>
+                                    <select id="material_cerco" name="material_cerco">
+                                        <option value="metalico" selected>Metálico</option>
+                                        <option value="mamposteria">Mampostería</option>
+                                        <option value="madera">Madera</option>
+                                        <option value="mixto">Mixto</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="wizard-step" data-step="3">
+                            <h2><i class="fas fa-paint-roller"></i> Terminaciones</h2>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="categoria">Categoría *</label>
+                                    <select id="categoria" name="categoria" required>
+                                        <option value="economico">Económico (x1.0)</option>
+                                        <option value="estandar" selected>Estándar (x1.35)</option>
+                                        <option value="premium">Premium (x1.8)</option>
+                                        <option value="lujo">Lujo (x2.5)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="factor_terminacion">Factor Terminación</label>
+                                    <input type="text" id="factor_terminacion_display" readonly value="1.35" class="readonly-field">
+                                    <small>Se calcula automáticamente según categoría</small>
+                                </div>
+                            </div>
+
+                            <h3><i class="fas fa-th-large"></i> Pisos y Aberturas</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="pisos">Pisos *</label>
+                                    <select id="pisos" name="pisos" required>
+                                        <option value="ceramico" selected>Cerámico</option>
+                                        <option value="porcelanato">Porcelanato</option>
+                                        <option value="madera">Madera</option>
+                                        <option value="microcemento">Microcemento</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="aberturas">Aberturas *</label>
+                                    <select id="aberturas" name="aberturas" required>
+                                        <option value="aluminio_dvh" selected>Aluminio DVH</option>
+                                        <option value="aluminio_basico">Aluminio Básico</option>
+                                        <option value="pvc">PVC</option>
+                                        <option value="madera">Madera</option>
+                                    </select>
+                                </div>
+                                <div class="form-group checkbox-inline">
+                                    <label><input type="checkbox" id="cocina_equipada" name="cocina_equipada" checked> Cocina Equipada</label>
+                                </div>
+                            </div>
+
+                            <h3><i class="fas fa-balance-scale"></i> Comparar Escenarios</h3>
+                            <div class="form-grid">
+                                <div class="form-group checkbox-inline full-width">
+                                    <label>
+                                        <input type="checkbox" id="escenarios" name="escenarios">
+                                        Generar comparativa de categorías
+                                    </label>
+                                    <small>Genera presupuestos para las 4 categorías (económico a lujo) lado a lado</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="wizard-step" data-step="4">
+                            <h2><i class="fas fa-bolt"></i> Instalaciones</h2>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label>Instalaciones *</label>
+                                    <div class="checkbox-group installations-grid">
+                                        <label><input type="checkbox" name="instalaciones" value="electrica" checked> Eléctrica</label>
+                                        <label><input type="checkbox" name="instalaciones" value="sanitaria" checked> Sanitaria</label>
+                                        <label><input type="checkbox" name="instalaciones" value="gas" checked> Gas</label>
+                                        <label><input type="checkbox" name="instalaciones" value="calefaccion_radiante"> Calefacción Radiante</label>
+                                        <label><input type="checkbox" name="instalaciones" value="aire_acondicionado"> Aire Acondicionado</label>
+                                        <label><input type="checkbox" name="instalaciones" value="domotica"> Domótica</label>
+                                        <label><input type="checkbox" name="instalaciones" value="paneles_solares"> Paneles Solares</label>
+                                        <label><input type="checkbox" name="instalaciones" value="pileta"> Pileta</label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h3><i class="fas fa-fire"></i> Calentador de Agua</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="calentador_agua">Tipo *</label>
+                                    <select id="calentador_agua" name="calentador_agua" required>
+                                        <option value="termotanque_gas" selected>Termotanque a Gas</option>
+                                        <option value="termotanque_electrico">Termotanque Eléctrico</option>
+                                        <option value="calefon">Calefón</option>
+                                        <option value="heat_pump">Heat Pump</option>
+                                        <option value="solar">Solar Térmico</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <h3><i class="fas fa-water"></i> Agua y Desagües</h3>
+                            <div class="form-grid">
+                                <div class="form-group checkbox-inline">
+                                    <label><input type="checkbox" id="tiene_cisterna" name="tiene_cisterna"> Cisterna</label>
+                                </div>
+                                <div class="form-group checkbox-inline">
+                                    <label><input type="checkbox" id="tiene_tanque_elevado" name="tiene_tanque_elevado" checked> Tanque Elevado</label>
+                                </div>
+                            </div>
+
+                            <h3><i class="fas fa-clock"></i> Plazo y Modalidad</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="plazo_meses">Plazo Estimado (meses) *</label>
+                                    <input type="number" id="plazo_meses" name="plazo_meses" required min="3" max="36" value="8">
+                                </div>
+                                <div class="form-group">
+                                    <label for="modalidad">Modalidad *</label>
+                                    <select id="modalidad" name="modalidad" required>
+                                        <option value="llave_en_mano" selected>Llave en Mano</option>
+                                        <option value="administracion">Administración</option>
+                                        <option value="solo_materiales">Solo Materiales</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <h3><i class="fas fa-file-upload"></i> Archivos de Proyecto (Opcional)</h3>
                             <div class="form-group">
-                                <label for="plantas">Plantas *</label>
-                                <select id="plantas" name="plantas" required>
-                                    <option value="1">1</option>
-                                    <option value="2">2</option>
-                                    <option value="3">3</option>
-                                </select>
+                                <label for="archivos">Subir planos o imágenes:</label>
+                                <input type="file" id="archivos" name="archivos" multiple accept=".pdf,.jpg,.jpeg,.png,.skp,.dwg">
+                                <p class="file-hint">Formatos admitidos: PDF, JPG, PNG, SKP (SketchUp), DWG (AutoCAD)</p>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="observaciones">Observaciones</label>
+                                <textarea id="observaciones" name="observaciones" rows="3" placeholder="Datos adicionales, requisitos especiales, etc."></textarea>
                             </div>
                         </div>
                     </div>
 
-                    <div class="form-section">
-                        <h3><i class="fas fa-building"></i> Sistema Constructivo</h3>
-                        <div class="form-grid">
-                            <div class="form-group">
-                                <label for="estructura">Estructura *</label>
-                                <select id="estructura" name="estructura" required>
-                                    <option value="albanileria">Albañilería</option>
-                                    <option value="steel_frame">Steel Frame</option>
-                                    <option value="hormigon_armado">Hormigón Armado</option>
-                                    <option value="madera">Madera</option>
-                                    <option value="mixto">Mixto</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="cubierta">Cubierta *</label>
-                                <select id="cubierta" name="cubierta" required>
-                                    <option value="chapa_acanalada">Chapa Acanalada</option>
-                                    <option value="chapa_trapezoidal">Chapa Trapezoidal</option>
-                                    <option value="membrana_losa">Membrana Losa</option>
-                                    <option value="teja_ceramica">Teja Cerámica</option>
-                                    <option value="techo_verde">Techo Verde</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="categoria">Categoría *</label>
-                                <select id="categoria" name="categoria" required>
-                                    <option value="economico">Económico</option>
-                                    <option value="estandar" selected>Estándar</option>
-                                    <option value="premium">Premium</option>
-                                    <option value="lujo">Lujo</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="factor_terminacion">Factor Terminación *</label>
-                                <select id="factor_terminacion" name="factor_terminacion" required>
-                                    <option value="1.0">1.0 (Económico)</option>
-                                    <option value="1.35" selected>1.35 (Estándar)</option>
-                                    <option value="1.8">1.8 (Premium)</option>
-                                    <option value="2.5">2.5 (Lujo)</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-section">
-                        <h3><i class="fas fa-paint-roller"></i> Terminaciones</h3>
-                        <div class="form-grid">
-                            <div class="form-group">
-                                <label for="pisos">Pisos *</label>
-                                <select id="pisos" name="pisos" required>
-                                    <option value="ceramico">Cerámico</option>
-                                    <option value="porcelanato">Porcelanato</option>
-                                    <option value="madera">Madera</option>
-                                    <option value="microcemento">Microcemento</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="aberturas">Aberturas *</label>
-                                <select id="aberturas" name="aberturas" required>
-                                    <option value="aluminio_dvh">Aluminio DVH</option>
-                                    <option value="aluminio_basico">Aluminio Básico</option>
-                                    <option value="pvc">PVC</option>
-                                    <option value="madera">Madera</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="dormitorios">Dormitorios *</label>
-                                <input type="number" id="dormitorios" name="dormitorios" required min="1" max="10" value="3">
-                            </div>
-                            <div class="form-group">
-                                <label for="cantidad_banos">Baños *</label>
-                                <input type="number" id="cantidad_banos" name="cantidad_banos" required min="1" max="6" value="2">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-section">
-                        <h3><i class="fas fa-bolt"></i> Instalaciones</h3>
-                        <div class="form-group">
-                            <label>Instalaciones *</label>
-                            <div class="checkbox-group">
-                                <label><input type="checkbox" name="instalaciones" value="electrica" checked> Eléctrica</label>
-                                <label><input type="checkbox" name="instalaciones" value="sanitaria" checked> Sanitaria</label>
-                                <label><input type="checkbox" name="instalaciones" value="gas" checked> Gas</label>
-                                <label><input type="checkbox" name="instalaciones" value="calefaccion_radiante"> Calefacción Radiante</label>
-                                <label><input type="checkbox" name="instalaciones" value="aire_acondicionado"> Aire Acondicionado</label>
-                                <label><input type="checkbox" name="instalaciones" value="domotica"> Domótica</label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-section">
-                        <h3><i class="fas fa-cogs"></i> Opciones Adicionales</h3>
-                        <div class="form-grid">
-                            <div class="form-group checkbox-inline">
-                                <label><input type="checkbox" id="tiene_cochera" name="tiene_cochera" checked> Cochera</label>
-                            </div>
-                            <div class="form-group checkbox-inline">
-                                <label><input type="checkbox" id="tiene_quincho" name="tiene_quincho"> Quincho</label>
-                            </div>
-                            <div class="form-group checkbox-inline">
-                                <label><input type="checkbox" id="tiene_galeria" name="tiene_galeria" checked> Galería</label>
-                            </div>
-                            <div class="form-group checkbox-inline">
-                                <label><input type="checkbox" id="tiene_deck" name="tiene_deck" checked> Deck</label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-section">
-                        <h3><i class="fas fa-calendar-alt"></i> Plazo y Modalidad</h3>
-                        <div class="form-grid">
-                            <div class="form-group">
-                                <label for="plazo_meses">Plazo Estimado (meses) *</label>
-                                <input type="number" id="plazo_meses" name="plazo_meses" required min="3" max="36" value="8">
-                            </div>
-                            <div class="form-group">
-                                <label for="modalidad">Modalidad *</label>
-                                <select id="modalidad" name="modalidad" required>
-                                    <option value="llave_en_mano">Llave en Mano</option>
-                                    <option value="administracion">Administración</option>
-                                    <option value="solo_materiales">Solo Materiales</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-section">
-                        <h3><i class="fas fa-upload"></i> Archivos de Proyecto (Opcional)</h3>
-                        <div class="form-group">
-                            <label for="archivos">Subir planos o imágenes:</label>
-                            <input type="file" id="archivos" name="archivos" multiple accept=".pdf,.jpg,.jpeg,.png,.skp,.dwg">
-                            <p class="file-hint">Formatos admitidos: PDF, JPG, PNG, SKP (SketchUp), DWG (AutoCAD)</p>
-                        </div>
-                    </div>
-
-                    <div class="form-actions">
-                        <button type="button" id="btnValidar" class="btn btn-secondary">
-                            <i class="fas fa-check"></i> Validar Blueprint
+                    <div class="wizard-nav">
+                        <button type="button" id="btnPrev" class="btn btn-secondary" style="display: none;">
+                            <i class="fas fa-arrow-left"></i> Anterior
                         </button>
-                        <button type="button" id="btnGenerar" class="btn btn-primary">
+                        <button type="button" id="btnNext" class="btn btn-primary">
+                            Siguiente <i class="fas fa-arrow-right"></i>
+                        </button>
+                        <button type="button" id="btnValidar" class="btn btn-secondary" style="display: none;">
+                            <i class="fas fa-check"></i> Validar
+                        </button>
+                        <button type="button" id="btnGenerar" class="btn btn-primary" style="display: none;">
                             <i class="fas fa-calculator"></i> Generar Presupuesto
                         </button>
                         <button type="reset" class="btn btn-reset">
-                            <i class="fas fa-redo"></i> Limpiar Formulario
+                            <i class="fas fa-redo"></i> Reiniciar
                         </button>
                     </div>
                 </form>
 
-                <div id="resultados" class="results-container">
-                    <!-- Resultados dinámicos -->
+                <div id="progressOverlay" class="progress-overlay" style="display: none;">
+                    <div class="progress-content">
+                        <h3><i class="fas fa-cog fa-spin"></i> Generando Presupuesto</h3>
+                        <div id="progressSteps" class="progress-steps-list">
+                            <div class="progress-step" data-step="1">
+                                <i class="fas fa-circle"></i> Extrayendo datos de archivos...
+                            </div>
+                            <div class="progress-step" data-step="2">
+                                <i class="fas fa-circle"></i> Buscando precios actualizados...
+                            </div>
+                            <div class="progress-step" data-step="3">
+                                <i class="fas fa-circle"></i> Generando presupuesto...
+                            </div>
+                        </div>
+                        <p id="progressMessage">Preparando...</p>
+                    </div>
                 </div>
+
+                <div id="resultados" class="results-container"></div>
             </div>
 
             <div class="info-sidebar">
+                <div class="history-section">
+                    <h3><i class="fas fa-history"></i> Historial Reciente</h3>
+                    <div id="historyList" class="history-list">
+                        <div class="loading-history">Cargando...</div>
+                    </div>
+                </div>
+
                 <h3><i class="fas fa-lightbulb"></i> Cómo funciona</h3>
                 <div class="info-card">
                     <h4><i class="fas fa-search"></i> 1. Extracción de datos</h4>
@@ -218,30 +443,11 @@
                     <h4><i class="fas fa-chart-line"></i> 4. Indicadores de confianza</h4>
                     <p>Cada ítem incluye un indicador de confianza basado en la calidad de los datos de entrada.</p>
                 </div>
-
-                <h3><i class="fas fa-history"></i> Historial Rápido</h3>
-                <div class="history-list">
-                    <div class="history-item">
-                        <strong>Casa Pilar</strong>
-                        <span>120 m² • $912,060</span>
-                        <small>Hace 5 min</small>
-                    </div>
-                    <div class="history-item">
-                        <strong>Departamento Belgrano</strong>
-                        <span>85 m² • $780,400</span>
-                        <small>Hace 2 días</small>
-                    </div>
-                    <div class="history-item">
-                        <strong>Casa Country</strong>
-                        <span>250 m² • $2,150,000</span>
-                        <small>Hace 1 semana</small>
-                    </div>
-                </div>
             </div>
         </div>
 
         <footer>
-            <p>Sistema Multi-Agente de Presupuestos v1.0 • Desarrollado para estudios de arquitectura</p>
+            <p>Sistema Multi-Agente de Presupuestos v2.0 • Desarrollado para estudios de arquitectura</p>
             <p class="footer-links">
                 <a href="#"><i class="fas fa-question-circle"></i> Ayuda</a>
                 <a href="#"><i class="fas fa-book"></i> Documentación</a>
