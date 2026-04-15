@@ -64,9 +64,23 @@ downloaded_skills/
 openclaw-skills*/
 skills_download*/
 
-# Generated output files (preserve source TypeScript files)
-output/*.xlsx
-output/*.pdf
-output/demo/
-output/*.html
-output/*.json
+# Generated output files
+output/
+*.xlsx
+*.html
+*.json
+
+# Large binaries
+OllamaSetup.exe
+
+# Temp files
+*.tmp
+BIT41BF.tmp
+
+# MCP logs
+mcp_*.txt
+
+# Large log files
+ollama_error.log
+llava_error.log
+llama_error.log
