@@ -1364,6 +1364,59 @@ select.error {
     margin: 2px;
 }
 
+/* Files Header */
+.files-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    background: #e3f2fd;
+    border-radius: 8px 8px 0 0;
+    margin-bottom: 0;
+}
+
+.files-header span {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.btn-limpiar-todos {
+    background: #f8d7da;
+    color: var(--accent-color);
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: var(--transition);
+}
+
+.btn-limpiar-todos:hover {
+    background: var(--accent-color);
+    color: white;
+}
+
+/* Progress detail */
+.progress-detail {
+    text-align: center;
+    color: #666;
+    font-style: italic;
+}
+
+.progress-detail i {
+    margin-right: 5px;
+    color: var(--secondary-color);
+}
+
+/* Extraccion info */
+.extraccion-info {
+    animation: fadeIn 0.5s ease;
+}
+
+.extraccion-info h4 i {
+    color: var(--success-color);
+}
+
 /* ========================================
    RESPONSIVE IMPROVEMENTS
    ======================================== */

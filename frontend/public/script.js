@@ -163,24 +163,46 @@ function initConditionalFields() {
     });
 }
 
+// Variable global para acumular archivos
+let archivosAcumulados = [];
+
 function initFileHandler() {
     const archivosInput = document.getElementById('archivos');
     const archivosLista = document.getElementById('archivosLista');
-    let archivosData = [];
 
-    archivosInput.addEventListener('change', function() {
-        archivosData = Array.from(this.files);
+    archivosInput.addEventListener('change', function(e) {
+        // Agregar los nuevos archivos a la lista acumulada
+        const nuevosArchivos = Array.from(this.files);
+        
+        // Verificar si ya existen archivos con el mismo nombre
+        for (const nuevo of nuevosArchivos) {
+            const yaExiste = archivosAcumulados.some(a => a.name === nuevo.name);
+            if (!yaExiste) {
+                archivosAcumulados.push(nuevo);
+            }
+        }
+        
+        // Recrear el FileList con todos los archivos
+        const dt = new DataTransfer();
+        archivosAcumulados.forEach(file => dt.items.add(file));
+        archivosInput.files = dt.files;
+        
         actualizarListaArchivos();
     });
 
     function actualizarListaArchivos() {
-        if (archivosData.length === 0) {
-            archivosLista.innerHTML = '<p class="no-files">No hay archivos adjuntos</p>';
+        if (archivosAcumulados.length === 0) {
+            archivosLista.innerHTML = '<p class="no-files">Arrastrá archivos o hacé click para seleccionar</p>';
             return;
         }
 
-        let html = '<div class="files-grid">';
-        archivosData.forEach((file, index) => {
+        let html = '<div class="files-header">';
+        html += `<span>${archivosAcumulados.length} archivo(s) seleccionado(s)</span>`;
+        html += `<button class="btn-limpiar-todos" onclick="limpiarTodosArchivos()"><i class="fas fa-trash"></i> Limpiar todos</button>`;
+        html += '</div>';
+        html += '<div class="files-grid">';
+        
+        archivosAcumulados.forEach((file, index) => {
             const ext = file.name.split('.').pop().toLowerCase();
             const icon = getFileIcon(ext);
             const size = formatFileSize(file.size);
@@ -202,12 +224,19 @@ function initFileHandler() {
         archivosLista.innerHTML = html;
     }
 
+    // Función global para remover archivo individual
     window.removeFile = function(index) {
-        archivosData.splice(index, 1);
-        // Recrear el FileList
+        archivosAcumulados.splice(index, 1);
         const dt = new DataTransfer();
-        archivosData.forEach(file => dt.items.add(file));
+        archivosAcumulados.forEach(file => dt.items.add(file));
         archivosInput.files = dt.files;
+        actualizarListaArchivos();
+    };
+
+    // Función global para limpiar todos
+    window.limpiarTodosArchivos = function() {
+        archivosAcumulados = [];
+        archivosInput.value = '';
         actualizarListaArchivos();
     };
 
@@ -287,26 +316,25 @@ async function subirArchivos(files) {
 // Función para procesar archivos y extraer datos
 async function procesarArchivos(archivos, blueprint = {}) {
     try {
-        updateProgressStep(1, 'running', 'Procesando archivos...');
-
         const response = await fetch(`${API_BASE}/api/upload/procesar`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ archivos, blueprint })
         });
 
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Error del servidor: ${response.status} - ${errorText}`);
+        }
+
         const result = await response.json();
         
-        updateProgressStep(1, 'completed', 'Archivos procesados');
-
-        if (result.success) {
-            return {
-                blueprint: result.blueprint,
-                extraccion: result.extraccion
-            };
-        } else {
-            throw new Error(result.error);
+        if (!result.success) {
+            throw new Error(result.error || 'Error desconocido al procesar');
         }
+        
+        return result;
+        
     } catch (error) {
         console.error('Error procesando archivos:', error);
         throw error;
@@ -537,7 +565,16 @@ async function generarPresupuesto() {
     } catch (error) {
         progressOverlay.style.display = 'none';
         resetProgressUI();
-        showToast('Error: ' + error.message, 'error');
+        
+        let mensajeError = 'Error de conexión';
+        if (error.name === 'AbortError') {
+            mensajeError = 'La solicitud tardó demasiado. Intentá de nuevo.';
+        } else if (error.message) {
+            mensajeError = error.message;
+        }
+        
+        showToast(mensajeError, 'error');
+        mostrarError([mensajeError]);
         console.error('Error generando:', error);
     }
 }
