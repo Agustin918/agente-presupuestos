@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { orchestrator } from '../agents/orchestrator';
 import { validarBlueprint } from '../blueprint/validator';
+import { getPreciosComparados } from '../agents/price_compare_agent';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -172,6 +173,22 @@ app.get('/api/presupuestos/:id', (req, res) => {
     }
   } catch (error) {
     res.status(500).json({ error: 'Error leyendo presupuesto' });
+  }
+});
+
+// Endpoint para comparar precios en múltiples fuentes
+app.get('/api/precios/comparar', async (req, res) => {
+  try {
+    const materiales = (req.query.materiales as string)?.split(',') || ['ladrillo', 'cemento', 'arena'];
+    
+    console.log(`[API] Comparando precios para: ${materiales.join(', ')}`);
+    
+    const precios = await getPreciosComparados(materiales);
+    
+    res.json({ success: true, precios });
+  } catch (error) {
+    console.error('Error comparando precios:', error);
+    res.status(500).json({ success: false, error: 'Error comparando precios' });
   }
 });
 

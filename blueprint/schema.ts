@@ -92,6 +92,7 @@ export interface PrecioCache {
     precio: number;
     unidad: string;
     fuente_url: string;
+    fuente_nombre?: string;
     fecha: string;
     vigente: boolean;
     precio_desactualizado?: boolean;
