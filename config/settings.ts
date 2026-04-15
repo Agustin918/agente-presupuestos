@@ -57,3 +57,7 @@ export const RAG = {
 
 export const ANTHROPIC_API_KEY = ENV.ANTHROPIC_API_KEY;
 export const ESTUDIO_ID = ENV.ESTUDIO_ID;
+
+// Ollama (alternativa local gratuita)
+export const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
+export const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3';
