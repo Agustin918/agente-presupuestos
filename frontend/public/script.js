@@ -454,28 +454,48 @@ async function generarPresupuesto() {
         let archivosSubidos = [];
         
         if (archivosInput.files && archivosInput.files.length > 0) {
-            updateProgressStep(1, 'running', 'Subiendo archivos...');
+            updateProgressStep(1, 'running', `Subiendo ${archivosInput.files.length} archivo(s)...`);
             archivosSubidos = await subirArchivos(archivosInput.files);
             updateProgressStep(1, 'completed', `(${archivosSubidos.length}) archivos subidos`);
         } else {
-            updateProgressStep(1, 'completed', 'Sin archivos');
+            updateProgressStep(1, 'completed', 'Sin archivos adjuntos');
         }
 
         // Procesar archivos y extraer datos
         let blueprintFinal = blueprint;
+        let datosExtraidos = null;
         
         if (archivosSubidos.length > 0) {
-            updateProgressStep(1, 'running', 'Extrayendo datos de archivos...');
-            const procesamiento = await procesarArchivos(archivosSubidos, blueprint);
-            blueprintFinal = procesamiento.blueprint;
-            
-            // Mostrar info de extracción
-            if (procesamiento.extraccion) {
-                showToast(`Extraídos ${procesamiento.extraccion.campos_extraidos} campos`, 'success');
+            updateProgressStep(2, 'running', 'Analizando archivos (puede tomar unos minutos)...');
+            try {
+                const procesamiento = await procesarArchivos(archivosSubidos, blueprint);
+                blueprintFinal = procesamiento.blueprint;
+                datosExtraidos = procesamiento.extraccion;
+                
+                updateProgressStep(2, 'completed', `(${datosExtraidos?.campos_extraidos || 0}) campos extraídos`);
+                
+                // Mostrar datos extraídos
+                mostrarDatosExtraidos({
+                    blueprint: blueprintFinal,
+                    confianza: datosExtraidos?.confianza,
+                    campos_extraidos: datosExtraidos?.campos_extraidos,
+                    archivos_procesados: archivosSubidos.map(a => a.nombre)
+                });
+                
+            } catch (procError) {
+                console.error('Error en procesamiento:', procError);
+                updateProgressStep(2, 'completed', 'Análisis completo');
+                showToast('Archivos subidos, análisis parcial', 'info');
             }
+        } else {
+            updateProgressStep(2, 'completed', 'Sin archivos para analizar');
         }
 
-        updateProgressStep(2, 'running', 'Buscando precios actualizados...');
+        updateProgressStep(3, 'running', 'Buscando precios actualizados...');
+
+        // Timeout extendido para el fetch
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15 * 60 * 1000); // 15 min
 
         const response = await fetch(`${API_BASE}/api/presupuesto/generar`, {
             method: 'POST',
@@ -483,15 +503,18 @@ async function generarPresupuesto() {
             body: JSON.stringify({
                 blueprint: blueprintFinal,
                 archivos: archivosSubidos
-            })
+            }),
+            signal: controller.signal
         });
 
-        updateProgressStep(2, 'completed', 'Precios obtenidos');
-        updateProgressStep(3, 'running', 'Generando presupuesto...');
+        clearTimeout(timeoutId);
+
+        updateProgressStep(3, 'completed', 'Precios obtenidos');
+        updateProgressStep(4, 'running', 'Generando presupuesto...');
 
         const result = await response.json();
 
-        updateProgressStep(3, 'completed', 'Presupuesto generado');
+        updateProgressStep(4, 'completed', '¡Presupuesto listo!');
 
         setTimeout(() => {
             progressOverlay.style.display = 'none';
@@ -514,7 +537,7 @@ async function generarPresupuesto() {
     } catch (error) {
         progressOverlay.style.display = 'none';
         resetProgressUI();
-        showToast('Error de conexión con el servidor', 'error');
+        showToast('Error: ' + error.message, 'error');
         console.error('Error generando:', error);
     }
 }
@@ -535,6 +558,12 @@ function updateProgressStep(step, status, message) {
         
         stepEl.lastElementChild.textContent = message;
     }
+    
+    // También actualizar mensaje de detalle
+    const detailEl = document.getElementById('progressDetail');
+    if (detailEl && status === 'running') {
+        detailEl.innerHTML = `<i class="fas fa-search"></i> ${message}`;
+    }
 }
 
 function resetProgressUI() {
@@ -542,6 +571,46 @@ function resetProgressUI() {
         step.className = 'progress-step';
         step.querySelector('i').className = 'fas fa-circle';
     });
+    const detailEl = document.getElementById('progressDetail');
+    if (detailEl) detailEl.innerHTML = '';
+}
+
+function mostrarDatosExtraidos(extraccion) {
+    const container = document.getElementById('extraccionInfo');
+    const camposDiv = document.getElementById('extraccionCampos');
+    
+    if (!container || !camposDiv) return;
+    
+    if (!extraccion || !extraccion.campos_extraidos) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    let html = '<ul style="margin: 0; padding-left: 20px;">';
+    
+    for (const [campo, valor] of Object.entries(extraccion.blueprint)) {
+        if (campo.startsWith('_') || campo === 'id') continue;
+        
+        const confianza = extraccion.confianza?.[campo] || 'media';
+        const confClass = confianza === 'alta' ? 'conf-alta' : confianza === 'baja' ? 'conf-baja' : 'conf-media';
+        
+        const label = campo.replace(/_/g, ' ');
+        const valorFormateado = typeof valor === 'number' ? valor.toLocaleString('es-AR') : valor;
+        
+        html += `<li style="margin: 5px 0;">
+            <strong>${label}:</strong> ${valorFormateado}
+            <span class="confianza-badge ${confClass}" style="margin-left: 5px;">${confianza}</span>
+        </li>`;
+    }
+    
+    html += '</ul>';
+    html += `<p style="margin-top: 10px; font-size: 0.85rem; color: #666;">
+        <i class="fas fa-file-alt"></i> Archivos procesados: ${extraccion.archivos_procesados?.length || 0}
+        | Campos extraídos: ${extraccion.campos_extraidos}
+    </p>`;
+    
+    camposDiv.innerHTML = html;
+    container.style.display = 'block';
 }
 
 function mostrarPresupuesto(presupuesto) {

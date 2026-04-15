@@ -280,6 +280,9 @@ app.post('/api/upload/base64', async (req: any, res: any) => {
 
 // Endpoint para procesar archivos y extraer datos (usando Extraction Agent)
 app.post('/api/upload/procesar', async (req: any, res: any) => {
+  // Timeout extendido para análisis meticuloso (10 minutos)
+  req.setTimeout(10 * 60 * 1000);
+  
   try {
     const { archivos, blueprint } = req.body;
     
@@ -287,11 +290,14 @@ app.post('/api/upload/procesar', async (req: any, res: any) => {
       return res.status(400).json({ success: false, error: 'No se recibieron archivos para procesar' });
     }
 
-    console.log(`[Upload] Procesando ${archivos.length} archivos...`);
+    console.log(`[Upload] Procesando ${archivos.length} archivos (análisis meticuloso)...`);
 
     // Llamar al extraction agent con las rutas de archivos
     const { extractionAgent } = require('../agents/extraction_agent');
     const rutasArchivos = archivos.map((a: any) => a.ruta);
+    
+    console.log(`[Upload] Archivos a procesar:`, rutasArchivos);
+    
     const extraccion = await extractionAgent.extractFromFiles(rutasArchivos);
 
     // Combinar con blueprint existente si existe
@@ -301,6 +307,11 @@ app.post('/api/upload/procesar', async (req: any, res: any) => {
       archivos_fuente: archivos.map((a: any) => a.nombre),
       confianza_extraccion: extraccion.confianza,
     };
+
+    console.log(`[Upload] Extracción completada:`, {
+      campos: Object.keys(extraccion.blueprint_parcial).length,
+      confianza: extraccion.confianza,
+    });
 
     res.json({
       success: true,
@@ -314,7 +325,7 @@ app.post('/api/upload/procesar', async (req: any, res: any) => {
     });
   } catch (error) {
     console.error('Error procesando archivos:', error);
-    res.status(500).json({ success: false, error: 'Error procesando archivos' });
+    res.status(500).json({ success: false, error: 'Error procesando archivos: ' + (error as Error).message });
   }
 });
 

@@ -413,20 +413,31 @@
 
                 <div id="progressOverlay" class="progress-overlay" style="display: none;">
                     <div class="progress-content">
-                        <h3><i class="fas fa-cog fa-spin"></i> Generando Presupuesto</h3>
+                        <h3><i class="fas fa-cog fa-spin"></i> Procesando...</h3>
                         <div id="progressSteps" class="progress-steps-list">
                             <div class="progress-step" data-step="1">
-                                <i class="fas fa-circle"></i> Extrayendo datos de archivos...
+                                <i class="fas fa-circle"></i> Subiendo archivos...
                             </div>
                             <div class="progress-step" data-step="2">
-                                <i class="fas fa-circle"></i> Buscando precios actualizados...
+                                <i class="fas fa-circle"></i> Analizando archivos (puede tomar unos minutos)...
                             </div>
                             <div class="progress-step" data-step="3">
+                                <i class="fas fa-circle"></i> Buscando precios actualizados...
+                            </div>
+                            <div class="progress-step" data-step="4">
                                 <i class="fas fa-circle"></i> Generando presupuesto...
                             </div>
                         </div>
-                        <p id="progressMessage">Preparando...</p>
+                        <div id="progressDetail" class="progress-detail" style="margin-top: 15px; font-size: 0.85rem; color: #666;">
+                            <!-- Detalles del análisis aparecerán aquí -->
+                        </div>
+                        <p id="progressMessage" style="margin-top: 15px;">Preparando...</p>
                     </div>
+                </div>
+
+                <div id="extraccionInfo" class="extraccion-info" style="display: none; margin-top: 20px; padding: 15px; background: #e8f5e9; border-radius: 8px; border-left: 4px solid #4caf50;">
+                    <h4 style="margin: 0 0 10px 0;"><i class="fas fa-check-circle"></i> Datos Extraídos de Archivos</h4>
+                    <div id="extraccionCampos"></div>
                 </div>
 
                 <div id="resultados" class="results-container"></div>
