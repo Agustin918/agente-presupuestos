@@ -239,6 +239,80 @@ function formatFileSize(bytes) {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+// Función para convertir archivo a base64
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+// Función para subir archivos al servidor
+async function subirArchivos(files) {
+    try {
+        const archivosBase64 = await Promise.all(
+            Array.from(files).map(async (file) => {
+                const base64 = await fileToBase64(file);
+                return {
+                    nombre: file.name,
+                    data: base64.split(',')[1], // Extraer solo la parte base64
+                    tipo: file.type,
+                    tamano: file.size
+                };
+            })
+        );
+
+        const response = await fetch(`${API_BASE}/api/upload/base64`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ archivos: archivosBase64 })
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log(`[Upload] ${result.archivos.length} archivos subidos`);
+            return result.archivos;
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (error) {
+        console.error('Error subiendo archivos:', error);
+        throw error;
+    }
+}
+
+// Función para procesar archivos y extraer datos
+async function procesarArchivos(archivos, blueprint = {}) {
+    try {
+        updateProgressStep(1, 'running', 'Procesando archivos...');
+
+        const response = await fetch(`${API_BASE}/api/upload/procesar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ archivos, blueprint })
+        });
+
+        const result = await response.json();
+        
+        updateProgressStep(1, 'completed', 'Archivos procesados');
+
+        if (result.success) {
+            return {
+                blueprint: result.blueprint,
+                extraccion: result.extraccion
+            };
+        } else {
+            throw new Error(result.error);
+        }
+    } catch (error) {
+        console.error('Error procesando archivos:', error);
+        throw error;
+    }
+}
+
 function initFormSync() {
     const categoriaSelect = document.getElementById('categoria');
     const factorDisplay = document.getElementById('factor_terminacion_display');
@@ -372,18 +446,43 @@ async function generarPresupuesto() {
     const progressOverlay = document.getElementById('progressOverlay');
     progressOverlay.style.display = 'flex';
     
-    updateProgressStep(1, 'running', 'Extrayendo datos de archivos...');
+    updateProgressStep(1, 'running', 'Subiendo archivos...');
 
     try {
-        updateProgressStep(1, 'completed', 'Datos extraídos');
+        // Subir archivos si hay
+        const archivosInput = document.getElementById('archivos');
+        let archivosSubidos = [];
+        
+        if (archivosInput.files && archivosInput.files.length > 0) {
+            updateProgressStep(1, 'running', 'Subiendo archivos...');
+            archivosSubidos = await subirArchivos(archivosInput.files);
+            updateProgressStep(1, 'completed', `(${archivosSubidos.length}) archivos subidos`);
+        } else {
+            updateProgressStep(1, 'completed', 'Sin archivos');
+        }
+
+        // Procesar archivos y extraer datos
+        let blueprintFinal = blueprint;
+        
+        if (archivosSubidos.length > 0) {
+            updateProgressStep(1, 'running', 'Extrayendo datos de archivos...');
+            const procesamiento = await procesarArchivos(archivosSubidos, blueprint);
+            blueprintFinal = procesamiento.blueprint;
+            
+            // Mostrar info de extracción
+            if (procesamiento.extraccion) {
+                showToast(`Extraídos ${procesamiento.extraccion.campos_extraidos} campos`, 'success');
+            }
+        }
+
         updateProgressStep(2, 'running', 'Buscando precios actualizados...');
 
         const response = await fetch(`${API_BASE}/api/presupuesto/generar`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                blueprint: blueprint,
-                archivos: []
+                blueprint: blueprintFinal,
+                archivos: archivosSubidos
             })
         });
 
@@ -405,7 +504,7 @@ async function generarPresupuesto() {
                 } else {
                     mostrarPresupuesto(result.presupuesto);
                 }
-                saveToHistory(blueprint, result.presupuesto);
+                saveToHistory(blueprintFinal, result.presupuesto);
             } else {
                 showToast('Error generando presupuesto', 'error');
                 mostrarError(result.errores);

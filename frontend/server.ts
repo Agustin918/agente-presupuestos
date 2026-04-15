@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
+import multer from 'multer';
 import { orchestrator } from '../agents/orchestrator';
 import { validarBlueprint } from '../blueprint/validator';
 import { getPreciosComparados } from '../agents/price_compare_agent';
@@ -10,8 +11,30 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Configuración de uploads
+const UPLOAD_DIR = path.join(__dirname, '..', 'data', 'uploads');
+if (!fs.existsSync(UPLOAD_DIR)) {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, UPLOAD_DIR);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname);
+        cb(null, `${uniqueSuffix}-${file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`);
+    }
+});
+
+const upload = multer({ 
+    storage,
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max
+});
 
 const HISTORIAL_FILE = path.join(__dirname, '..', 'data', 'historial.json');
 
@@ -173,6 +196,162 @@ app.get('/api/presupuestos/:id', (req, res) => {
     }
   } catch (error) {
     res.status(500).json({ error: 'Error leyendo presupuesto' });
+  }
+});
+
+// ============ UPLOAD DE ARCHIVOS ============
+
+// Endpoint para subir múltiples archivos
+app.post('/api/upload', upload.array('archivos', 20), async (req: any, res: any) => {
+  try {
+    const archivos = req.files as any[];
+    
+    if (!archivos || archivos.length === 0) {
+      return res.status(400).json({ success: false, error: 'No se recibieron archivos' });
+    }
+
+    const archivosInfo = archivos.map((file: any) => ({
+      id: file.filename.split('-')[0],
+      nombre: file.originalname,
+      nombreGuardado: file.filename,
+      tamano: file.size,
+      tipo: file.mimetype,
+      extension: path.extname(file.originalname).toLowerCase(),
+      ruta: file.path,
+    }));
+
+    console.log(`[Upload] ${archivos.length} archivos subidos`);
+    
+    res.json({ 
+      success: true, 
+      archivos: archivosInfo,
+      mensaje: `${archivos.length} archivo(s) subido(s) correctamente`
+    });
+  } catch (error) {
+    console.error('Error subiendo archivos:', error);
+    res.status(500).json({ success: false, error: 'Error subiendo archivos' });
+  }
+});
+
+// Endpoint para subir archivos como base64 (más compatible con frontend)
+app.post('/api/upload/base64', async (req: any, res: any) => {
+  try {
+    const { archivos } = req.body as { archivos: Array<{ nombre: string; data: string; tipo: string }> };
+    
+    if (!archivos || archivos.length === 0) {
+      return res.status(400).json({ success: false, error: 'No se recibieron archivos' });
+    }
+
+    const archivosInfo: any[] = [];
+
+    for (const archivo of archivos) {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+      const ext = path.extname(archivo.nombre);
+      const filename = `${uniqueSuffix}-${archivo.nombre.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const filepath = path.join(UPLOAD_DIR, filename);
+
+      // Decodificar base64 y guardar
+      const buffer = Buffer.from(archivo.data, 'base64');
+      fs.writeFileSync(filepath, buffer);
+
+      archivosInfo.push({
+        id: uniqueSuffix.toString(),
+        nombre: archivo.nombre,
+        nombreGuardado: filename,
+        tamano: buffer.length,
+        tipo: archivo.tipo,
+        extension: ext.toLowerCase(),
+        ruta: filepath,
+      });
+    }
+
+    console.log(`[Upload] ${archivos.length} archivos subidos (base64)`);
+    
+    res.json({ 
+      success: true, 
+      archivos: archivosInfo,
+      mensaje: `${archivos.length} archivo(s) subido(s) correctamente`
+    });
+  } catch (error) {
+    console.error('Error subiendo archivos:', error);
+    res.status(500).json({ success: false, error: 'Error subiendo archivos' });
+  }
+});
+
+// Endpoint para procesar archivos y extraer datos (usando Extraction Agent)
+app.post('/api/upload/procesar', async (req: any, res: any) => {
+  try {
+    const { archivos, blueprint } = req.body;
+    
+    if (!archivos || archivos.length === 0) {
+      return res.status(400).json({ success: false, error: 'No se recibieron archivos para procesar' });
+    }
+
+    console.log(`[Upload] Procesando ${archivos.length} archivos...`);
+
+    // Llamar al extraction agent con las rutas de archivos
+    const { extractionAgent } = require('../agents/extraction_agent');
+    const rutasArchivos = archivos.map((a: any) => a.ruta);
+    const extraccion = await extractionAgent.extractFromFiles(rutasArchivos);
+
+    // Combinar con blueprint existente si existe
+    const blueprintFinal = {
+      ...blueprint,
+      ...extraccion.blueprint_parcial,
+      archivos_fuente: archivos.map((a: any) => a.nombre),
+      confianza_extraccion: extraccion.confianza,
+    };
+
+    res.json({
+      success: true,
+      blueprint: blueprintFinal,
+      extraccion: {
+        campos_extraidos: Object.keys(extraccion.blueprint_parcial).length,
+        confianza: extraccion.confianza,
+        archivos_procesados: extraccion.archivos_procesados,
+        notas: extraccion.notas_extraccion,
+      }
+    });
+  } catch (error) {
+    console.error('Error procesando archivos:', error);
+    res.status(500).json({ success: false, error: 'Error procesando archivos' });
+  }
+});
+
+// Endpoint para eliminar archivo
+app.delete('/api/upload/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const files = fs.readdirSync(UPLOAD_DIR);
+    const file = files.find(f => f.startsWith(id + '-'));
+    
+    if (file) {
+      fs.unlinkSync(path.join(UPLOAD_DIR, file));
+      res.json({ success: true, mensaje: 'Archivo eliminado' });
+    } else {
+      res.status(404).json({ success: false, error: 'Archivo no encontrado' });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Error eliminando archivo' });
+  }
+});
+
+// Endpoint para listar archivos subidos
+app.get('/api/upload', (req, res) => {
+  try {
+    const files = fs.readdirSync(UPLOAD_DIR);
+    const archivos = files.map(f => {
+      const stats = fs.statSync(path.join(UPLOAD_DIR, f));
+      return {
+        nombre: f.substring(f.indexOf('-', f.indexOf('-') + 1) + 1),
+        nombreGuardado: f,
+        tamano: stats.size,
+        fecha: stats.mtime,
+      };
+    });
+    res.json({ success: true, archivos });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Error listando archivos' });
   }
 });
 
