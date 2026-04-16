@@ -9,7 +9,7 @@ export async function generateBudgetItems(
   precios: Record<string, { precio: number; unidad: string; fuente_url: string; fecha: string }>,
   obrasSimilares: any[]
 ): Promise<ItemPresupuesto[]> {
-  const superficie = blueprint.superficie_cubierta_m2 + (blueprint.superficie_semicubierta_m2 || 0);
+  const superficie = blueprint.superficie_cubierta_m2 + ((blueprint.superficie_semicubierta_m2 || 0) * 0.5);
   const factorTerminacion = blueprint.factor_terminacion || 1;
   const hoy = new Date().toISOString().split('T')[0];
   
@@ -46,24 +46,24 @@ export async function generateBudgetItems(
 
   // TABLA DE PRECIOS REALES EN USD BLUE (Construcción Premium/Estandar Argentina 2026)
   const preciosReferencia: Record<string, number> = {
-    excavacion: 55,
-    hormigon: 245,
-    hierro: 1.9,
-    ladrillo: 42,
-    aislacion: 18,
-    estructura_cubierta: 110,
-    chapa: 52,
-    revoque: 38,
-    cielorraso: 48,
-    aluminio: 580,
-    porcelanato: 95,
-    electrica: 135,
-    sanitaria: 195,
-    gas: 155,
-    sanitarios: 1150,
-    puerta_interior: 460,
-    placard: 850,
-    pintura: 22,
+    excavacion: 45,
+    hormigon: 210,
+    hierro: 1.6,
+    ladrillo: 35,
+    aislacion: 14,
+    estructura_cubierta: 95,
+    chapa: 42,
+    revoque: 32,
+    cielorraso: 38,
+    aluminio: 450,
+    porcelanato: 65,
+    electrica: 110,
+    sanitaria: 160,
+    gas: 120,
+    sanitarios: 950,
+    puerta_interior: 380,
+    placard: 650,
+    pintura: 16,
   };
 
   const items: ItemPresupuesto[] = [];

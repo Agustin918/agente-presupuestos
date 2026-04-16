@@ -12,6 +12,8 @@ import * as fs from "fs";
 import * as path from "path";
 import { getDb } from "../database/db";
 import { driveService } from "../services/google_drive";
+import { excelGenerator } from "../output/excel_generator";
+import { pdfGenerator } from "../output/pdf_generator";
 
 export interface LogEntry {
   timestamp: string;
@@ -348,9 +350,23 @@ export async function runWithFiles(
   const usuarioDir = path.join(OUTPUT_DIR, blueprint.usuario_id);
   ensureDir(usuarioDir);
 
-  const timestamp = new Date().toISOString().replace(/:/g, "-");
+  const timestamp = new Date().toISOString().replace(/:/g, "-").split('.')[0];
   const outputFile = path.join(usuarioDir, `${blueprint.id}_v${blueprint.version}_${timestamp}.json`);
   fs.writeFileSync(outputFile, JSON.stringify({ presupuesto, comparativo, extractionResult }, null, 2));
+  
+  // --- EXPORTACIÓN AUTOMÁTICA A EXCEL Y PDF (v7.0) ---
+  try {
+    console.log(`[Orchestrator] Generando exportaciones para ${blueprint.nombre_obra}...`);
+    const excelPath = await excelGenerator.generarExcel(presupuesto, `Presupuesto_${blueprint.nombre_obra}_v${blueprint.version}`, comparativo);
+    const pdfPath = await pdfGenerator.generarPDF(presupuesto, blueprint.nombre_obra, comparativo);
+    
+    logs.push(log("orchestrator", "export_excel", "ok", 0, `Excel: ${excelPath}`));
+    logs.push(log("orchestrator", "export_pdf", "ok", 0, `PDF: ${pdfPath}`));
+  } catch (exportErr: any) {
+    console.error(`[Orchestrator] Error en exportación: ${exportErr.message}`);
+    logs.push(log("orchestrator", "export", "error", 0, exportErr.message));
+  }
+
   logs.push(log("orchestrator", "save", "ok", 0, `Guardado en ${outputFile}`));
 
   // --- 10. SINCRONIZACIÓN CON GOOGLE DRIVE (PRO) ---

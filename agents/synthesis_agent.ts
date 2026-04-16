@@ -38,7 +38,7 @@ export async function generarPresupuesto(
   tasaCambio: number = DEFAULT_TASA
 ): Promise<Presupuesto> {
   const materiales = getMaterialesDelBlueprint(blueprint);
-  const m2 = blueprint.superficie_cubierta_m2 + (blueprint.superficie_semicubierta_m2 || 0);
+  const m2 = blueprint.superficie_cubierta_m2 + ((blueprint.superficie_semicubierta_m2 || 0) * 0.5);
 
   // 1. Obtención de precios (y conversión inmediata a USD si vienen en ARS)
   const rawPrecios = precios || (await researchAgent.getPrices(materiales, blueprint.ubicacion));
