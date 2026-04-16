@@ -1,0 +1,348 @@
+import { Blueprint, ItemPresupuesto } from '../blueprint/schema';
+import { OLLAMA_URL, OLLAMA_MODEL, ANTHROPIC_API_KEY } from '../config/settings';
+import { Anthropic } from '@anthropic-ai/sdk';
+
+const anthropic = new Anthropic({
+  apiKey: ANTHROPIC_API_KEY,
+});
+
+export type LLMProvider = 'anthropic' | 'ollama' | 'mock';
+
+function buildPrompt(blueprint: Blueprint, precios: Record<string, any>, obrasSimilares: any[]): string {
+  return `Eres un experto en construcción y presupuestos para estudios de arquitectura en Argentina. Tu tarea es generar una lista de ítems detallada para un presupuesto residencial basado en el siguiente Blueprint.
+
+IMPORTANTE: 
+1. La divisa es DÓLARES (USD).
+2. Debes clasificar cada ítem en una de las siguientes CATEGORÍAS EXACTAS:
+   - 01 - Trabajos Preliminares
+   - 02 - Movimiento de Suelos
+   - 03 - Estructura Resistente
+   - 04 - Albañilería Obra Gruesa
+   - 05 - Capas Aisladoras
+   - 06 - Cubiertas y Techos
+   - 07 - Revestimientos y Revoques
+   - 08 - Cielorrasos
+   - 09 - Carpintería Exterior
+   - 10 - Vidrios y Cristales
+   - 11 - Pisos y Zócalos
+   - 12 - Instalación Eléctrica
+   - 13 - Instalación Sanitaria y Agua
+   - 14 - Instalación de Gas
+   - 15 - Climatización (Calefacción/AA)
+   - 16 - Sanitarios y Grifería
+   - 17 - Carpintería Interior (Puertas/Placards)
+   - 18 - Pintura
+   - 19 - Equipamiento (Cocina/Vanitories)
+   - 20 - Obras Exteriores y Varios
+
+3. TRAZABILIDAD: Para cada material cuyo precio se te provee en el objeto 'precios', DEBES incluir el campo 'fuente' con la URL exacta proporcionada.
+
+BLUEPRINT:
+${JSON.stringify(blueprint, null, 2)}
+
+PRECIOS DE MERCADO ACTUALES (Usar como base):
+${JSON.stringify(precios, null, 2)}
+
+OBRAS HISTÓRICAS DE REFERENCIA (Para cantidades y rubros faltantes):
+${JSON.stringify(obrasSimilares, null, 2)}
+
+Responde ÚNICAMENTE con un JSON que sea un array de objetos ItemPresupuesto:
+interface ItemPresupuesto {
+  rubro: string;
+  descripcion: string;
+  unidad: string;
+  cantidad: number;
+  precio_unitario: number; // En USD
+  subtotal: number; // En USD
+  categoria: string; // Una de las 20 categorías listadas arriba
+  fuente: string; // URL o fuente del precio
+  fecha_precio: string;
+  razonamiento_ia: string; // EXPLICA TUS SUPUESTOS: alturas (ej: 2.60m), calidades asumidas, marcas sugeridas o criterios técnicos.
+}
+
+Sé extremadamente detallado. Desarrolla la 'Obra Gruesa' por completo (excavaciones, hormigón, ladrillos, cemento, hierro), las 'Carpinterías', 'Sanitarios', 'Vidrios' y todas las instalaciones.`;
+}
+
+export async function generateBudgetItems(
+  blueprint: Blueprint,
+  precios: Record<string, { precio: number; unidad: string; fuente_url: string; fecha: string }>,
+  obrasSimilares: any[]
+): Promise<ItemPresupuesto[]> {
+  // Intentar primero con el LLM real si la API Key está configurada
+  if (ANTHROPIC_API_KEY && ANTHROPIC_API_KEY !== 'TU_API_KEY_AQUI') {
+    try {
+      const prompt = buildPrompt(blueprint, precios, obrasSimilares);
+      return await callAnthropic(prompt);
+    } catch (error) {
+      console.warn('[LLM] Falló síntesis por LLM, usando motor heurístico de emergencia...');
+    }
+  }
+
+  // Fallback a motor heurístico mejorado (Precios reales en USD)
+  const superficie = blueprint.superficie_cubierta_m2 + (blueprint.superficie_semicubierta_m2 || 0);
+  const factorTerminacion = blueprint.factor_terminacion;
+  const hoy = new Date().toISOString().split('T')[0];
+  
+  // 1. Calcular ratios promedio de obras similares
+  const ratiosPromedio: Record<string, number> = {};
+  if (obrasSimilares.length > 0) {
+    const todosRatios: Record<string, number[]> = {};
+    obrasSimilares.forEach(obra => {
+      if (obra.ratios) {
+        Object.entries(obra.ratios).forEach(([key, value]) => {
+          if (typeof value === 'number') {
+            if (!todosRatios[key]) todosRatios[key] = [];
+            todosRatios[key].push(value);
+          }
+        });
+      }
+    });
+    Object.entries(todosRatios).forEach(([key, values]) => {
+      const avg = values.reduce((a, b) => a + b, 0) / values.length;
+      ratiosPromedio[key] = avg;
+    });
+  }
+  
+  // 2. Plantilla de ítems base por categoría
+  interface ItemBase {
+    rubro: string;
+    unidad: string;
+    ratio: number;
+    precioKey: string;
+    categoria: string;
+    ratioKey?: string;
+    razonamiento?: string;
+  }
+  const itemsBase: ItemBase[] = [
+    // Obra gruesa
+    { rubro: 'Excavación y movimiento de suelos', unidad: 'm3', ratio: 0.5, precioKey: 'excavacion', categoria: '02 - Movimiento de Suelos', ratioKey: 'excavacion_por_m2' },
+    { rubro: 'Hormigón de cimentación H21', unidad: 'm3', ratio: 0.18, precioKey: 'hormigon', categoria: '03 - Estructura Resistente', ratioKey: 'hormigon_por_m2' },
+    { rubro: 'Acero para estructura', unidad: 'kg', ratio: 25, precioKey: 'hierro', categoria: '03 - Estructura Resistente', ratioKey: 'acero_por_m2' },
+    { rubro: 'Ladrillos huecos 18x18x33', unidad: 'un', ratio: 15, precioKey: 'ladrillo', categoria: '04 - Albañilería Obra Gruesa', ratioKey: 'ladrillo_por_m2' },
+    { rubro: 'Cemento Portland', unidad: 'bolsa', ratio: 0.8, precioKey: 'cemento', categoria: '04 - Albañilería Obra Gruesa', ratioKey: 'cemento_por_m2' },
+    { rubro: 'Arena', unidad: 'm3', ratio: 0.1, precioKey: 'arena', categoria: '04 - Albañilería Obra Gruesa', ratioKey: 'arena_por_m2' },
+    // Cubierta
+    { rubro: 'Estructura de cubierta', unidad: 'm2', ratio: 1, precioKey: 'estructura_cubierta', categoria: '06 - Cubiertas y Techos', ratioKey: 'estructura_cubierta_por_m2' },
+    { rubro: 'Chapa trapezoidal', unidad: 'm2', ratio: 1, precioKey: 'chapa', categoria: '06 - Cubiertas y Techos', ratioKey: 'chapa_por_m2' },
+    // Terminaciones
+    { rubro: 'Revoque fino exterior', unidad: 'm2', ratio: 2.5, precioKey: 'revoque', categoria: '07 - Revestimientos y Revoques', ratioKey: 'revoque_exterior_por_m2' },
+    { rubro: 'Revoque fino interior', unidad: 'm2', ratio: 2.5, precioKey: 'revoque', categoria: '07 - Revestimientos y Revoques', ratioKey: 'revoque_interior_por_m2' },
+    { rubro: 'Pisos de porcelanato', unidad: 'm2', ratio: 1, precioKey: 'porcelanato', categoria: '11 - Pisos y Zócalos', ratioKey: 'pisos_por_m2' },
+    { rubro: 'Carpintería de aluminio DVH', unidad: 'm2', ratio: 0.2, precioKey: 'aluminio', categoria: '09 - Carpintería Exterior', ratioKey: 'carpinteria_exterior_por_m2' },
+    { rubro: 'Vidrio DVH', unidad: 'm2', ratio: 0.15, precioKey: 'vidrio', categoria: '10 - Vidrios y Cristales', ratioKey: 'vidrio_por_m2' },
+    { rubro: 'Cielorraso suspendido', unidad: 'm2', ratio: 1, precioKey: 'cielorraso', categoria: '08 - Cielorrasos', ratioKey: 'cielorraso_por_m2' },
+    { rubro: 'Carpintería interior (puertas)', unidad: 'un', ratio: 0.1, precioKey: 'puerta_interior', categoria: '17 - Carpintería Interior (Puertas/Placards)', ratioKey: 'puertas_por_m2' },
+    { rubro: 'Placard / vestidor', unidad: 'ml', ratio: 0.2, precioKey: 'placard', categoria: '17 - Carpintería Interior (Puertas/Placards)', ratioKey: 'placard_por_m2' },
+    { rubro: 'Pintura interior/exterior', unidad: 'm2', ratio: 3.5, precioKey: 'pintura', categoria: '18 - Pintura', ratioKey: 'pintura_por_m2' },
+    // Instalaciones
+    { rubro: 'Instalación eléctrica completa', unidad: 'm2', ratio: 1, precioKey: 'instalacion_electrica', categoria: '12 - Instalación Eléctrica', ratioKey: 'instalacion_electrica_por_m2' },
+    { rubro: 'Instalación sanitaria', unidad: 'm2', ratio: 0.8, precioKey: 'instalacion_sanitaria', categoria: '13 - Instalación Sanitaria y Agua', ratioKey: 'instalacion_sanitaria_por_m2' },
+    { rubro: 'Instalación de gas', unidad: 'm2', ratio: 0.6, precioKey: 'instalacion_gas', categoria: '14 - Instalación de Gas', ratioKey: 'instalacion_gas_por_m2' },
+    { rubro: 'Aire acondicionado splits', unidad: 'un', ratio: 0.02, precioKey: 'aire_acondicionado', categoria: '15 - Climatización (Calefacción/AA)', razonamiento: 'Se asumen equipos tipo Split Inverter por eficiencia energética.', ratioKey: 'aire_acondicionado_por_m2' },
+    { rubro: 'Calefacción radiante', unidad: 'm2', ratio: 0.6, precioKey: 'calefaccion', categoria: '15 - Climatización (Calefacción/AA)', ratioKey: 'calefaccion_por_m2' },
+    // Sanitarios
+    { rubro: 'Sanitarios y grifería', unidad: 'un', ratio: 0.04, precioKey: 'sanitarios', categoria: '16 - Sanitarios y Grifería', razonamiento: 'Se asumen artefactos Ferrum/FV según nivel de terminación.', ratioKey: 'sanitarios_por_m2' },
+    // Equipamiento
+    { rubro: 'Cocina equipada', unidad: 'un', ratio: 0.01, precioKey: 'cocina', categoria: '19 - Equipamiento (Cocina/Vanitories)', ratioKey: 'cocina_por_m2' },
+    { rubro: 'Vanitory', unidad: 'un', ratio: 0.02, precioKey: 'vanitory', categoria: '19 - Equipamiento (Cocina/Vanitories)', ratioKey: 'vanitory_por_m2' },
+    // Exteriores y varios
+    { rubro: 'Portón y cerco metálico', unidad: 'ml', ratio: 0.5, precioKey: 'porton', categoria: '20 - Obras Exteriores y Varios', ratioKey: 'porton_por_m2' },
+    { rubro: 'Deck de madera', unidad: 'm2', ratio: 0.1, precioKey: 'deck', categoria: '20 - Obras Exteriores y Varios', ratioKey: 'deck_por_m2' },
+  ];
+  
+  // 3. Generar items
+  const items: ItemPresupuesto[] = [];
+  
+  for (const base of itemsBase) {
+    // Calcular cantidad usando ratio histórico si está disponible
+    let ratio = base.ratio;
+    if (base.ratioKey && ratiosPromedio[base.ratioKey]) {
+      ratio = ratiosPromedio[base.ratioKey];
+      console.log(`[Ratio] Usando ratio histórico para ${base.rubro}: ${ratio} (antes ${base.ratio})`);
+    }
+    let cantidad = superficie * ratio;
+    // Ajustar por factor de terminación: La calidad afecta al precio unitario, no a la cantidad física.
+    const aplicaFactor = base.categoria.includes('Pisos') || base.categoria.includes('Revestimientos') || base.categoria.includes('Carpintería') || base.categoria.includes('Pintura') || base.categoria.includes('Sanitarios') || base.categoria.includes('Climatización') || base.categoria.includes('Equipamiento') || base.categoria.includes('Vidrios') || base.categoria.includes('Cielorrasos');
+    
+    // Buscar precio
+    let precioUnitario = 0;
+    let fuente = 'estimado';
+    let fechaPrecio = hoy;
+    let confianza: "alta" | "media" | "baja" = "baja";
+    
+    // Buscar precio en los precios obtenidos (coincidencia parcial)
+    const precioKey = base.precioKey;
+    let precioObj = null;
+    let precioKeyEncontrada = '';
+    
+    // Mapeo de sinónimos
+    const sinonimos: Record<string, string[]> = {
+      excavacion: ['excavacion', 'movimiento de suelos', 'movimiento suelos'],
+      hormigon: ['hormigon', 'hormigón', 'concreto', 'h21'],
+      hierro: ['hierro', 'acero', 'hierro 8mm', 'hierro 6mm', 'hierro 10mm'],
+      ladrillo: ['ladrillo', 'ladrillos', 'ladrillo hueco', 'bloque'],
+      cemento: ['cemento', 'cemento portland', 'bolsa cemento'],
+      arena: ['arena', 'arena gruesa', 'arena fina'],
+      estructura_cubierta: ['estructura', 'cubierta', 'estructura cubierta', 'perfil'],
+      chapa: ['chapa', 'chapa trapezoidal', 'chapa acanalada'],
+      revoque: ['revoque', 'revoque fino', 'revoque grueso'],
+      porcelanato: ['porcelanato', 'ceramico', 'piso'],
+      aluminio: ['aluminio', 'ventana aluminio', 'perfil aluminio'],
+      vidrio: ['vidrio', 'vidrio dvh', 'cristal'],
+      pintura: ['pintura', 'latex', 'esmalte'],
+      instalacion_electrica: ['electric', 'cable', 'tablero', 'instalacion electrica'],
+      instalacion_sanitaria: ['sanitaria', 'agua', 'cloaca', 'caño pvc'],
+      instalacion_gas: ['gas', 'instalacion gas', 'caño gas'],
+      aire_acondicionado: ['aire acondicionado', 'split', 'climatizacion'],
+      sanitarios: ['sanitario', 'inodoro', 'bidet', 'griferia'],
+      cielorraso: ['cielorraso', 'durlock', 'yeso', 'cielorraso suspendido'],
+      puerta_interior: ['puerta interior', 'puerta placa', 'puerta madera'],
+      placard: ['placard', 'vestidor', 'ropero'],
+      calefaccion: ['calefaccion', 'radiador', 'caldera'],
+      cocina: ['cocina', 'mueble cocina', 'cocina equipada'],
+      vanitory: ['vanitory', 'mueble baño', 'lavatorio'],
+      porton: ['porton', 'cerco', 'portón metálico'],
+      deck: ['deck', 'deck madera', 'entablonado'],
+    };
+    
+    const clavesPrecios = Object.keys(precios);
+    for (const clave of clavesPrecios) {
+      const claveLower = clave.toLowerCase();
+      // Buscar coincidencia exacta
+      if (claveLower === precioKey) {
+        precioObj = precios[clave];
+        precioKeyEncontrada = clave;
+        break;
+      }
+      // Buscar en sinónimos
+      const listaSinonimos = sinonimos[precioKey] || [];
+      if (listaSinonimos.some(s => claveLower.includes(s))) {
+        precioObj = precios[clave];
+        precioKeyEncontrada = clave;
+        break;
+      }
+    }
+    
+    if (precioObj) {
+      precioUnitario = precioObj.precio;
+      fuente = precioObj.fuente_url || 'fuente externa';
+      const urlFinal = precioObj.fuente_url || '';
+      fechaPrecio = precioObj.fecha;
+      confianza = 'media';
+      
+      items.push({
+        rubro: base.rubro,
+        descripcion: base.desc,
+        unidad: base.unidad,
+        cantidad: Math.round(cantidad * 100) / 100,
+        precio_unitario: Math.round(precioUnitario * (aplicaFactor ? factor : 1)),
+        subtotal: Math.round(cantidad * precioUnitario * (aplicaFactor ? factor : 1)),
+        fuente: fuente.length > 30 ? fuente.substring(0, 27) + '...' : fuente,
+        fuente_url: urlFinal,
+        fecha_precio: fechaPrecio,
+        categoria: base.categoria,
+        confianza: confianza
+      });
+      continue;
+    }
+      // VALORES DE REFERENCIA REALES EN USD BLUE (Basados en costo de ~$1,300/m2)
+      const preciosDefaultUSD: Record<string, number> = {
+        excavacion: 45,
+        hormigon: 220,
+        hierro: 1.2,
+        ladrillo: 0.6,
+        cemento: 8,
+        arena: 35,
+        estructura_cubierta: 120,
+        chapa: 45,
+        revoque: 25,
+        porcelanato: 65,
+        aluminio: 350,
+        vidrio: 180,
+        pintura: 12,
+        instalacion_electrica: 85,
+        instalacion_sanitaria: 110,
+        instalacion_gas: 65,
+        aire_acondicionado: 850,
+        sanitarios: 450,
+        cielorraso: 35,
+        puerta_interior: 250,
+        placard: 800,
+        calefaccion: 95,
+        cocina: 1500,
+        vanitory: 350,
+        porton: 1200,
+        deck: 85,
+      };
+      precioUnitario = preciosDefaultUSD[precioKey] || 100;
+      fuente = 'estimación base de mercado (USD Blue)';
+      confianza = 'baja';
+    }
+    
+    // Ajustar precio unitario por factor de terminación (solo algunos rubros)
+    if (aplicaFactor) {
+      precioUnitario *= factorTerminacion;
+    }
+    
+    const subtotal = cantidad * precioUnitario;
+    
+    items.push({
+      rubro: base.rubro,
+      descripcion: `${base.rubro} para obra de ${superficie}m²`,
+      unidad: base.unidad,
+      cantidad: Math.round(cantidad * 100) / 100,
+      precio_unitario: Math.round(precioUnitario),
+      subtotal: Math.round(subtotal),
+      categoria: base.categoria,
+      fuente,
+      fuente_url: '', // Default vacío si no viene de búsqueda
+      fecha_precio: fechaPrecio,
+      confianza,
+      nota_confianza: confianza === 'baja' ? 'Precio estimado por falta de datos actualizados' : '',
+      precio_desactualizado: false,
+      razonamiento_ia: (base as any).razonamiento || `Basado en ratios estándar para obra de ${blueprint.estructura}.`,
+    });
+  }
+  
+  return items;
+}
+
+async function callAnthropic(prompt: string): Promise<ItemPresupuesto[]> {
+  try {
+    console.log('[LLM] Generando presupuesto mediante Claude 3.5 Sonnet...');
+    const response = await anthropic.messages.create({
+      model: "claude-3-5-sonnet-latest",
+      max_tokens: 8192,
+      temperature: 0,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const content = (response.content[0] as any).text;
+    const jsonMatch = content.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) throw new Error('No se encontró un JSON válido en la respuesta de Claude');
+    
+    return JSON.parse(jsonMatch[0]);
+  } catch (error) {
+    console.error('[LLM] Error en la llamada a Anthropic:', error);
+    throw error;
+  }
+}
+
+async function callOllama(prompt: string): Promise<ItemPresupuesto[]> {
+  throw new Error('Not implemented');
+}
+
+function extractItemsFromText(text: string): ItemPresupuesto[] {
+  return [];
+}
+
+function generateMockItems(blueprint: Blueprint, precios: Record<string, any>): ItemPresupuesto[] {
+  // Simple mock
+  return [];
+}
+
+export const llmService = {
+  generateBudgetItems,
+  callAnthropic,
+  callOllama,
+};

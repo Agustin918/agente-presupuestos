@@ -77,8 +77,15 @@ export async function extractFromFiles(filePaths: string[]): Promise<ExtractionR
 
   analisisCompleto.tiempo_ms = Date.now() - startTime;
   
+  // Recolectar especificaciones técnicas de las notas de visión
+  const especificaciones = analisisCompleto.archivos
+    .map(a => a.elementos_detectados)
+    .flat()
+    .filter(e => e.length > 20); // Solo frases con contenido técnico real
+
   console.log(`[Extraction Agent] ✓ Análisis completado en ${(analisisCompleto.tiempo_ms / 1000).toFixed(1)}s`);
   console.log(`[Extraction] Campos extraídos: ${camposConsolidados.length}`);
+  console.log(`[Extraction] Especificaciones detectadas: ${especificaciones.length}`);
   console.log(`[Extraction] Errores: ${analisisCompleto.errores.length}`);
 
   return {
@@ -86,6 +93,7 @@ export async function extractFromFiles(filePaths: string[]): Promise<ExtractionR
     confianza: confianza,
     archivos_procesados: filePaths,
     notas_extraccion: notas,
+    especificaciones_tecnicas: especificaciones
   };
 }
 
@@ -142,47 +150,28 @@ async function analizarPDF(
   filePath: string,
   archivo: AnalisisCompleto['archivos'][0]
 ): Promise<{ archivo: AnalisisCompleto['archivos'][0]; campos: CampoExtraido[]; errores: string[] }> {
-  
   const campos: CampoExtraido[] = [];
   const errores: string[] = [];
 
-  console.log(`[Extraction]   Analizando PDF...`);
+  console.log(`[Extraction]   Analizando PDF con Visión AI...`);
   
   try {
-    // Simular análisis profundo (en producción usaría PDF.js + OCR)
-    await delay(2000); // Tiempo para procesamiento real
+    const { extractFromPDF } = require('../services/vision');
+    const visionResult = await extractFromPDF(filePath);
     
-    // Intentar extraer con Vision API si está disponible
-    try {
-      const visionResult = await extractFromPDFWithVision(filePath);
-      
-      archivo.elementos_detectados = visionResult.elementos;
-      archivo.analisis = visionResult.resumen;
-      
-      for (const campo of visionResult.campos) {
-        campos.push(campo);
-      }
-      
-      if (visionResult.errores.length > 0) {
-        errores.push(...visionResult.errores);
-      }
-      
-    } catch (visionError) {
-      console.log(`[Extraction]   Vision no disponible, usando análisis local`);
-      
-      // Análisis local del PDF
-      const contenido = extraerTextoPDFLocal(filePath);
-      const elementos = detectarElementosEnTexto(contenido);
-      
-      archivo.elementos_detectados = elementos;
-      archivo.analisis = `Detectados ${elementos.length} elementos en el documento`;
-      
-      // Extraer campos del texto
-      campos.push(...extraerCamposDeTexto(contenido, 'pdf'));
+    archivo.elementos_detectados = visionResult.notas;
+    archivo.analisis = `PDF procesado con Claude 3.5 Sonnet`;
+    
+    for (const [key, value] of Object.entries(visionResult.blueprint)) {
+      campos.push({
+        campo: key,
+        valor: value,
+        confianza: (visionResult.confianza[key] as any) || 'media',
+        fuente: 'vision_pdf_ai',
+      });
     }
-
   } catch (error) {
-    errores.push(`Error analizando PDF: ${(error as Error).message}`);
+    errores.push(`Error Vision PDF: ${(error as Error).message}`);
   }
 
   return { archivo, campos, errores };
@@ -192,25 +181,28 @@ async function analizarImagen(
   filePath: string,
   archivo: AnalisisCompleto['archivos'][0]
 ): Promise<{ archivo: AnalisisCompleto['archivos'][0]; campos: CampoExtraido[]; errores: string[] }> {
-  
   const campos: CampoExtraido[] = [];
   const errores: string[] = [];
 
-  console.log(`[Extraction]   Analizando imagen...`);
+  console.log(`[Extraction]   Analizando imagen con Claude Vision...`);
   
   try {
-    await delay(1500); // Tiempo para procesamiento de imagen
+    const { extractFromImage } = require('../services/vision');
+    const visionResult = await extractFromImage(filePath);
     
-    // Análisis de imagen (en producción usaría Claude Vision o similar)
-    const analisis = await analizarImagenConVision(filePath);
+    archivo.elementos_detectados = visionResult.notas;
+    archivo.analisis = `Imagen analizada con Claude 3.5 Sonnet`;
     
-    archivo.elementos_detectados = analisis.elementos;
-    archivo.analisis = analisis.resumen;
-    
-    campos.push(...analisis.campos);
-    
+    for (const [key, value] of Object.entries(visionResult.blueprint)) {
+      campos.push({
+        campo: key,
+        valor: value,
+        confianza: (visionResult.confianza[key] as any) || 'media',
+        fuente: 'vision_image_ai',
+      });
+    }
   } catch (error) {
-    errores.push(`Error analizando imagen: ${(error as Error).message}`);
+    errores.push(`Error Vision Image: ${(error as Error).message}`);
   }
 
   return { archivo, campos, errores };
@@ -522,6 +514,7 @@ function construirBlueprint(campos: CampoExtraido[]): Partial<Blueprint> {
 
   const mapeoCampos: Record<string, string[]> = {
     superficie_cubierta_m2: ['superficie_cubierta_m2', 'superficie'],
+    superficie_semicubierta_m2: ['superficie_semicubierta_m2'],
     dormitorios: ['dormitorios', 'habitaciones'],
     cantidad_banos: ['cantidad_banos', 'banos'],
     plantas: ['plantas'],
@@ -530,6 +523,8 @@ function construirBlueprint(campos: CampoExtraido[]): Partial<Blueprint> {
     tiene_quincho: ['quincho'],
     tiene_deck: ['deck'],
     nombre_obra: ['nombre_obra', 'obra'],
+    escala_detectada: ['escala_detectada'],
+    metodo_extraccion: ['metodo_extraccion'],
   };
 
   for (const campo of campos) {
@@ -580,17 +575,27 @@ function calcularConfianza(campos: CampoExtraido[]): Record<string, "alta" | "me
 function generarNotas(analisis: AnalisisCompleto): string[] {
   const notas: string[] = [];
   
-  notas.push(`Análisis de ${analisis.archivos.length} archivo(s) completado en ${(analisis.tiempo_ms / 1000).toFixed(1)}s`);
+  notas.push(`Análisis técnico de ${analisis.archivos.length} archivos.`);
   
   for (const archivo of analisis.archivos) {
-    notas.push(`${archivo.tipo}: ${archivo.nombre} - ${archivo.analisis}`);
+    notas.push(`[${archivo.nombre}] ${archivo.analisis}`);
     if (archivo.elementos_detectados.length > 0) {
-      notas.push(`  Elementos: ${archivo.elementos_detectados.join(', ')}`);
+      archivo.elementos_detectados.forEach(e => {
+        if (e.length > 5) notas.push(`   - ${e}`);
+      });
     }
   }
+
+  const escala = analisis.campos.find(c => c.campo === 'escala_detectada')?.valor || 'no detectada';
+  const metodo = analisis.campos.find(c => c.campo === 'metodo_extraccion')?.valor || 'inferencia';
+  
+  notas.push(`Resumen de Verificación:`);
+  notas.push(`- Escala de referencia: ${escala}`);
+  notas.push(`- Método de cálculo: ${metodo}`);
   
   if (analisis.errores.length > 0) {
-    notas.push(`Advertencias: ${analisis.errores.length}`);
+    notas.push(`⚠ Advertencias Técnicas:`);
+    analisis.errores.forEach(err => notas.push(`  * ${err}`));
   }
 
   return notas;

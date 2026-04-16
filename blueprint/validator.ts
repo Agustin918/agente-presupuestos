@@ -26,7 +26,7 @@ export function validarBlueprint(data: any): { valido: boolean; errores: string[
   ERRORES.length = 0;
 
   if (!validarRequired(data, "id")) return { valido: false, errores: [...ERRORES] };
-  if (!validarRequired(data, "version")) return { valido: false, errores: [...ERRORES] };
+  // version es opcional al crear (se asigna en versioning.ts)
   if (!validarRequired(data, "usuario_id")) return { valido: false, errores: [...ERRORES] };
   if (!validarRequired(data, "estudio_id")) return { valido: false, errores: [...ERRORES] };
   if (!validarRequired(data, "fecha_creacion")) return { valido: false, errores: [...ERRORES] };
@@ -76,6 +76,7 @@ export function validarBlueprint(data: any): { valido: boolean; errores: string[
 
   const blueprint: Blueprint = {
     ...data,
+    version: data.version || 1,
     factor_terminacion: FACTOR_TERMINACION[categoria],
   };
 

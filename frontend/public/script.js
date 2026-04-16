@@ -1,9 +1,10 @@
 const API_BASE = window.location.origin;
-
 let currentStep = 1;
 const totalSteps = 4;
 let currentUser = null;
 let presupuestoData = null;
+let map = null;
+let marker = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     initAuth();
@@ -12,6 +13,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initFormSync();
     initEventListeners();
     initFileHandler();
+    initMap();
     loadHistory();
 });
 
@@ -93,6 +95,11 @@ function updateWizardUI() {
         btnNext.style.display = 'inline-flex';
         btnValidar.style.display = 'none';
         btnGenerar.style.display = 'none';
+    }
+
+    // Fix para que el mapa se renderice correctamente si volvemos al paso 1
+    if (currentStep === 1 && typeof map !== 'undefined' && map) {
+        setTimeout(() => map.invalidateSize(), 100);
     }
 }
 
@@ -198,7 +205,7 @@ function initFileHandler() {
 
         let html = '<div class="files-header">';
         html += `<span>${archivosAcumulados.length} archivo(s) seleccionado(s)</span>`;
-        html += `<button class="btn-limpiar-todos" onclick="limpiarTodosArchivos()"><i class="fas fa-trash"></i> Limpiar todos</button>`;
+        html += `<button class="btn-limpiar-todos" onclick="limpiarTodosArchivos()"><i class="fas fa-trash" aria-hidden="true"></i> Limpiar todos</button>`;
         html += '</div>';
         html += '<div class="files-grid">';
         
@@ -215,7 +222,7 @@ function initFileHandler() {
                         <div class="file-meta">${size} • ${ext.toUpperCase()}</div>
                     </div>
                     <button class="file-remove" onclick="removeFile(${index})">
-                        <i class="fas fa-times"></i>
+                        <i class="fas fa-times" aria-hidden="true"></i>
                     </button>
                 </div>
             `;
@@ -245,19 +252,19 @@ function initFileHandler() {
 
 function getFileIcon(ext) {
     const icons = {
-        'pdf': '<i class="fas fa-file-pdf"></i>',
-        'dwg': '<i class="fas fa-drafting-compass"></i>',
-        'skp': '<i class="fas fa-cube"></i>',
-        'jpg': '<i class="fas fa-image"></i>',
-        'jpeg': '<i class="fas fa-image"></i>',
-        'png': '<i class="fas fa-image"></i>',
-        'xlsx': '<i class="fas fa-file-excel"></i>',
-        'xls': '<i class="fas fa-file-excel"></i>',
-        'ifc': '<i class="fas fa-building"></i>',
-        '3dm': '<i class="fas fa-cube"></i>',
-        'obj': '<i class="fas fa-cube"></i>',
-        'rvt': '<i class="fas fa-drafting-compass"></i>',
-        'default': '<i class="fas fa-file"></i>'
+        'pdf': '<i class="fas fa-file-pdf" aria-hidden="true"></i>',
+        'dwg': '<i class="fas fa-drafting-compass" aria-hidden="true"></i>',
+        'skp': '<i class="fas fa-cube" aria-hidden="true"></i>',
+        'jpg': '<i class="fas fa-image" aria-hidden="true"></i>',
+        'jpeg': '<i class="fas fa-image" aria-hidden="true"></i>',
+        'png': '<i class="fas fa-image" aria-hidden="true"></i>',
+        'xlsx': '<i class="fas fa-file-excel" aria-hidden="true"></i>',
+        'xls': '<i class="fas fa-file-excel" aria-hidden="true"></i>',
+        'ifc': '<i class="fas fa-building" aria-hidden="true"></i>',
+        '3dm': '<i class="fas fa-cube" aria-hidden="true"></i>',
+        'obj': '<i class="fas fa-cube" aria-hidden="true"></i>',
+        'rvt': '<i class="fas fa-drafting-compass" aria-hidden="true"></i>',
+        'default': '<i class="fas fa-file" aria-hidden="true"></i>'
     };
     return icons[ext] || icons['default'];
 }
@@ -278,26 +285,24 @@ function fileToBase64(file) {
     });
 }
 
-// Función para subir archivos al servidor
+// Función para subir archivos al servidor usando FormData (más eficiente para archivos grandes)
 async function subirArchivos(files) {
     try {
-        const archivosBase64 = await Promise.all(
-            Array.from(files).map(async (file) => {
-                const base64 = await fileToBase64(file);
-                return {
-                    nombre: file.name,
-                    data: base64.split(',')[1], // Extraer solo la parte base64
-                    tipo: file.type,
-                    tamano: file.size
-                };
-            })
-        );
+        const formData = new FormData();
+        
+        for (let i = 0; i < files.length; i++) {
+            formData.append('archivos', files[i]);
+        }
 
-        const response = await fetch(`${API_BASE}/api/upload/base64`, {
+        const response = await fetch(`${API_BASE}/api/upload`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ archivos: archivosBase64 })
+            body: formData
         });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Error subiendo: ${response.status} - ${errorText}`);
+        }
 
         const result = await response.json();
         
@@ -305,7 +310,7 @@ async function subirArchivos(files) {
             console.log(`[Upload] ${result.archivos.length} archivos subidos`);
             return result.archivos;
         } else {
-            throw new Error(result.error);
+            throw new Error(result.error || 'Error desconocido');
         }
     } catch (error) {
         console.error('Error subiendo archivos:', error);
@@ -434,7 +439,17 @@ function obtenerBlueprint() {
         
         plazo_meses: parseInt(document.getElementById('plazo_meses').value),
         modalidad: document.getElementById('modalidad').value,
-        observaciones: document.getElementById('observaciones').value
+        observaciones: document.getElementById('observaciones').value,
+
+        detalle_constructivo: {
+            ladrillo_tipo: document.getElementById('ladrillo_tipo').value,
+            ladrillo_espesor_cm: 18, // Por defecto, se puede expandir después
+            fundacion_tipo: document.getElementById('fundacion_tipo').value,
+            fundacion_espesor_cm: parseInt(document.getElementById('fundacion_espesor_cm').value) || 20,
+            entrepiso_tipo: document.getElementById('entrepiso_tipo').value,
+            steel_frame_perfil: document.getElementById('estructura').value === 'steel_frame' ? 'PGC' : undefined,
+            steel_frame_espesor_chapa: document.getElementById('estructura').value === 'steel_frame' ? '0.9mm' : undefined
+        }
     };
 }
 
@@ -470,6 +485,12 @@ async function generarPresupuesto() {
     const blueprint = obtenerBlueprint();
     
     if (!validateCurrentStep()) return;
+
+    const btnGenerar = document.getElementById('btnGenerar');
+    const btnValidar = document.getElementById('btnValidar');
+    btnGenerar.disabled = true;
+    btnValidar.disabled = true;
+    btnGenerar.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Generando...';
 
     const progressOverlay = document.getElementById('progressOverlay');
     progressOverlay.style.display = 'flex';
@@ -576,40 +597,49 @@ async function generarPresupuesto() {
         showToast(mensajeError, 'error');
         mostrarError([mensajeError]);
         console.error('Error generando:', error);
+    } finally {
+        const btnGenerar = document.getElementById('btnGenerar');
+        const btnValidar = document.getElementById('btnValidar');
+        if (btnGenerar) {
+            btnGenerar.disabled = false;
+            btnGenerar.innerHTML = '<i class="fas fa-calculator" aria-hidden="true"></i> Generar Presupuesto';
+        }
+        if (btnValidar) {
+            btnValidar.disabled = false;
+        }
     }
 }
 
 function updateProgressStep(step, status, message) {
-    const stepEl = document.querySelector(`.progress-step[data-step="${step}"]`);
-    if (stepEl) {
-        const icon = stepEl.querySelector('i');
-        stepEl.className = `progress-step ${status}`;
-        
-        if (status === 'running') {
-            icon.className = 'fas fa-spinner fa-spin';
-        } else if (status === 'completed') {
-            icon.className = 'fas fa-check-circle';
-        } else if (status === 'error') {
-            icon.className = 'fas fa-exclamation-circle';
-        }
-        
-        stepEl.lastElementChild.textContent = message;
-    }
+    const stepEl = document.querySelector(`.progress-step-item[data-step="${step}"]`);
+    const progressBar = document.getElementById('progressBar');
+    const statusText = document.getElementById('progressStatus');
     
-    // También actualizar mensaje de detalle
-    const detailEl = document.getElementById('progressDetail');
-    if (detailEl && status === 'running') {
-        detailEl.innerHTML = `<i class="fas fa-search"></i> ${message}`;
+    if (stepEl) {
+        if (status === 'running') {
+            stepEl.classList.add('active');
+            stepEl.classList.remove('completed');
+            if (message) statusText.textContent = message;
+            
+            // Simular avance de barra
+            const progressMap = {1: 15, 2: 40, 3: 75, 4: 95};
+            if (progressBar) progressBar.style.width = `${progressMap[step]}%`;
+        } else if (status === 'completed') {
+            stepEl.classList.add('completed');
+            stepEl.classList.remove('active');
+            if (step === 4 && progressBar) progressBar.style.width = '100%';
+        }
     }
 }
 
 function resetProgressUI() {
-    document.querySelectorAll('.progress-step').forEach(step => {
-        step.className = 'progress-step';
-        step.querySelector('i').className = 'fas fa-circle';
+    document.querySelectorAll('.progress-step-item').forEach(step => {
+        step.classList.remove('active', 'completed');
     });
-    const detailEl = document.getElementById('progressDetail');
-    if (detailEl) detailEl.innerHTML = '';
+    const progressBar = document.getElementById('progressBar');
+    if (progressBar) progressBar.style.width = '0%';
+    const statusText = document.getElementById('progressStatus');
+    if (statusText) statusText.textContent = 'Iniciando proceso...';
 }
 
 function mostrarDatosExtraidos(extraccion) {
@@ -642,7 +672,7 @@ function mostrarDatosExtraidos(extraccion) {
     
     html += '</ul>';
     html += `<p style="margin-top: 10px; font-size: 0.85rem; color: #666;">
-        <i class="fas fa-file-alt"></i> Archivos procesados: ${extraccion.archivos_procesados?.length || 0}
+        <i class="fas fa-file-alt" aria-hidden="true"></i> Archivos procesados: ${extraccion.archivos_procesados?.length || 0}
         | Campos extraídos: ${extraccion.campos_extraidos}
     </p>`;
     
@@ -654,94 +684,143 @@ function mostrarPresupuesto(presupuesto) {
     const resultadosDiv = document.getElementById('resultados');
     
     const totalFormateado = formatCurrency(presupuesto.total_estimado);
-    const fechaFormateada = new Date(presupuesto.fecha).toLocaleDateString('es-AR', {
+    const costoM2Formateado = formatCurrency(presupuesto.costo_m2);
+    
+    // Formatear fecha local evitando desfase UTC
+    const [year, month, day] = presupuesto.fecha.split('-');
+    const fechaFormateada = new Date(year, month - 1, day).toLocaleDateString('es-AR', {
         year: 'numeric', month: 'long', day: 'numeric'
     });
 
     let html = `
         <div class="result-header">
             <div class="result-title">
-                <i class="fas fa-check-circle"></i>
-                Presupuesto Generado
+                <i class="fas fa-check-circle" aria-hidden="true"></i>
+                Presupuesto Generado (Dólares)
             </div>
             <p>${presupuesto.obra} • ${fechaFormateada}</p>
         </div>
-        
-        <div class="result-summary-card">
-            <div class="summary-main">
-                <span class="summary-label">TOTAL ESTIMADO</span>
-                <span class="summary-value">${totalFormateado}</span>
+
+        <div class="dashboard-grid">
+            <div class="chart-box">
+                <h5 style="margin-top:0"><i class="fas fa-chart-pie"></i> Distribución de Gastos</h5>
+                <div style="height: 250px; display: flex; justify-content: center;">
+                    <canvas id="budgetChart"></canvas>
+                </div>
             </div>
-            <div class="summary-details">
-                <div class="summary-item">
-                    <span class="label">Superficie</span>
-                    <span class="value">${presupuesto.superficie_m2} m²</span>
+            
+            <div class="result-summary-card" style="margin-bottom: 0;">
+                <div class="summary-main">
+                    <div class="total-box">
+                        <span class="summary-label">TOTAL ESTIMADO</span>
+                        <span class="summary-value">${totalFormateado}</span>
+                    </div>
+                    <div class="m2-box" style="border-left: 1px solid rgba(26,58,95,0.1); padding-left: 20px;">
+                        <span class="summary-label">COSTO POR M²</span>
+                        <span class="summary-value" style="font-size: 1.8rem; color: #3a7bd5;">${costoM2Formateado}</span>
+                    </div>
                 </div>
-                <div class="summary-item">
-                    <span class="label">Estructura</span>
-                    <span class="value">${presupuesto.estructura}</span>
-                </div>
-                <div class="summary-item">
-                    <span class="label">Categoría</span>
-                    <span class="value">${presupuesto.categoria}</span>
+                <div class="summary-details">
+                    <div class="summary-item">
+                        <span class="label"><i class="fas fa-ruler-combined"></i> Superficie</span>
+                        <span class="value">${presupuesto.superficie_m2} m²</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label"><i class="fas fa-building"></i> Estructura</span>
+                        <span class="value">${presupuesto.estructura}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label"><i class="fas fa-award"></i> Categoría</span>
+                        <span class="value">${presupuesto.categoria}</span>
+                    </div>
                 </div>
             </div>
         </div>
 
+        ${renderQACard(presupuesto.reporte_qa)}
+
         <div class="cache-status-bar">
-            <span class="cache-badge fresh"><i class="fas fa-check"></i> ${presupuesto.precios_frescos} precios frescos</span>
-            <span class="cache-badge cached"><i class="fas fa-clock"></i> ${presupuesto.precios_cache} del caché</span>
-            ${presupuesto.precios_vencidos > 0 ? `<span class="cache-badge expired"><i class="fas fa-exclamation"></i> ${presupuesto.precios_vencidos} vencidos</span>` : ''}
+            <span class="cache-badge fresh"><i class="fas fa-check" aria-hidden="true"></i> ${presupuesto.precios_frescos} precios frescos</span>
+            <span class="cache-badge cached"><i class="fas fa-clock" aria-hidden="true"></i> ${presupuesto.precios_cache} del caché</span>
         </div>
 
         <div class="items-section">
-            <h4><i class="fas fa-list"></i> Detalle del Presupuesto</h4>
-            <div class="table-container">
-                <table class="items-table">
-                    <thead>
-                        <tr>
-                            <th>Rubro</th>
-                            <th>Descripción</th>
-                            <th>Cantidad</th>
-                            <th>Precio Unit.</th>
-                            <th>Subtotal</th>
-                            <th>Confianza</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+            <h4><i class="fas fa-list" aria-hidden="true"></i> Detalle por Etapas</h4>
     `;
-    
+
+    // Agrupar items por categoría
+    const grupos = {};
     presupuesto.items.forEach(item => {
-        const confianzaClass = `conf-${item.confianza || 'media'}`;
+        const cat = item.categoria || 'Varios';
+        if (!grupos[cat]) grupos[cat] = [];
+        grupos[cat].push(item);
+    });
+
+    Object.keys(grupos).sort().forEach(cat => {
+        const items = grupos[cat];
+        const subtotalCat = items.reduce((sum, i) => sum + i.subtotal, 0);
+        
         html += `
-            <tr class="${item.precio_desactualizado ? 'row-warning' : ''}">
-                <td><strong>${item.rubro || '-'}</strong></td>
-                <td>${item.descripcion || '-'}</td>
-                <td>${item.cantidad ? item.cantidad.toLocaleString('es-AR') : '-'}</td>
-                <td>${item.precio_unitario ? formatCurrency(item.precio_unitario) : '-'}</td>
-                <td><strong>${item.subtotal ? formatCurrency(item.subtotal) : '-'}</strong></td>
-                <td><span class="confianza-badge ${confianzaClass}">${item.confianza || 'media'}</span></td>
-            </tr>
+            <div class="category-group" style="margin-bottom: 30px; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
+                <div class="category-header" style="background: #f8f9fa; padding: 12px 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+                    <h5 style="margin: 0; color: #1a3a5f;">${cat}</h5>
+                    <span style="font-weight: bold; color: #1a3a5f;">Subtotal: ${formatCurrency(subtotalCat)}</span>
+                </div>
+                <div class="table-container">
+                    <table class="items-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 25%">Rubro</th>
+                                <th style="width: 35%">Descripción</th>
+                                <th style="width: 10%">Cant.</th>
+                                <th style="width: 15%">Precio Unit.</th>
+                                <th style="width: 15%">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+
+        items.forEach(item => {
+            html += `
+                <tr class="${item.precio_desactualizado ? 'row-warning' : ''}">
+                    <td><strong>${item.rubro || '-'}</strong></td>
+                    <td>
+                        <div class="item-desc">${item.descripcion || '-'}</div>
+                        ${item.razonamiento_ia ? `
+                            <div class="ai-reasoning" title="Criterio técnico de la IA">
+                                <i class="fas fa-brain"></i> ${item.razonamiento_ia}
+                            </div>
+                        ` : ''}
+                    </td>
+                    <td>${item.cantidad ? item.cantidad.toLocaleString('es-AR') : '-'}</td>
+                    <td>${formatCurrency(item.precio_unitario)}</td>
+                    <td><strong>${formatCurrency(item.subtotal)}</strong></td>
+                </tr>
+            `;
+        });
+
+        html += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         `;
     });
 
-    html += `
-                    </tbody>
-                </table>
-            </div>
-        </div>
+    html += `</div>`; // Cerrar items-section
 
+    html += `
         <div class="downloads-section">
-            <h4><i class="fas fa-download"></i> Descargar</h4>
+            <h4><i class="fas fa-download" aria-hidden="true"></i> Descargar</h4>
             <div class="download-buttons">
                 <button class="btn-download excel" onclick="downloadExcel()">
-                    <i class="fas fa-file-excel"></i> Excel
+                    <i class="fas fa-file-excel" aria-hidden="true"></i> Excel
                 </button>
                 <button class="btn-download pdf" onclick="downloadPDF()">
-                    <i class="fas fa-file-pdf"></i> PDF
+                    <i class="fas fa-file-pdf" aria-hidden="true"></i> PDF
                 </button>
                 <button class="btn-download json" onclick="downloadJSON()">
-                    <i class="fas fa-file-code"></i> JSON
+                    <i class="fas fa-file-code" aria-hidden="true"></i> JSON
                 </button>
             </div>
         </div>
@@ -750,6 +829,72 @@ function mostrarPresupuesto(presupuesto) {
     resultadosDiv.innerHTML = html;
     resultadosDiv.className = 'results-container show result-success';
     resultadosDiv.scrollIntoView({ behavior: 'smooth' });
+
+    // Inicializar gráfico después de inyectar el HTML
+    setTimeout(() => initBudgetChart(presupuesto), 100);
+}
+
+function renderQACard(report) {
+    if (!report) return '';
+    const statusClass = `qa-${report.status}`;
+    const statusLabel = report.status === 'aprobado' ? 'Auditoría Exitosa' : 
+                       report.status === 'critico' ? 'ALERTA CRÍTICA DEL AUDITOR' : 'Observaciones Técnicas';
+    
+    return `
+        <div class="qa-card ${statusClass}">
+            <h4 style="margin-top:0"><i class="fas fa-user-shield"></i> ${statusLabel}</h4>
+            ${report.alerta_roja.length > 0 ? `
+                <div style="margin-bottom: 10px;">
+                    <strong style="display:block; margin-bottom: 5px;">⚠️ Alertas:</strong>
+                    <ul style="margin:0; padding-left: 20px;">
+                        ${report.alerta_roja.map(a => `<li>${a}</li>`).join('')}
+                    </ul>
+                </div>
+            ` : ''}
+            <div>
+                <strong style="display:block; margin-bottom: 5px;">💡 Sugerencias:</strong>
+                <ul style="margin:0; padding-left: 20px;">
+                    ${report.sugerencias.map(s => `<li>${s}</li>`).join('')}
+                </ul>
+            </div>
+        </div>
+    `;
+}
+
+function initBudgetChart(presupuesto) {
+    const ctx = document.getElementById('budgetChart');
+    if (!ctx) return;
+
+    const grupos = {};
+    presupuesto.items.forEach(item => {
+        const cat = item.categoria || 'Varios';
+        grupos[cat] = (grupos[cat] || 0) + item.subtotal;
+    });
+
+    const labels = Object.keys(grupos);
+    const data = Object.values(grupos);
+
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: [
+                    '#1a3a5f', '#3a7bd5', '#00d2ff', '#4fcf8d', '#f6ad55', 
+                    '#fc8181', '#9f7aea', '#ed64a6', '#4fd1c5', '#718096'
+                ],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'right', labels: { boxWidth: 12, font: { size: 10 } } }
+            }
+        }
+    });
 }
 
 function mostrarComparativo(comparativo) {
@@ -762,7 +907,7 @@ function mostrarComparativo(comparativo) {
     let html = `
         <div class="result-header">
             <div class="result-title">
-                <i class="fas fa-check-circle"></i>
+                <i class="fas fa-check-circle" aria-hidden="true"></i>
                 Comparativa de Escenarios
             </div>
             <p>${comparativo.obra} • ${fechaFormateada}</p>
@@ -805,7 +950,7 @@ function mostrarComparativo(comparativo) {
 
         ${comparativo.escenarios[0]?.items_que_mas_cambian?.length > 0 ? `
         <div class="comparative-notes">
-            <h5><i class="fas fa-info-circle"></i> Items que más cambian entre categorías:</h5>
+            <h5><i class="fas fa-info-circle" aria-hidden="true"></i> Items que más cambian entre categorías:</h5>
             <ul>
                 ${comparativo.escenarios[0].items_que_mas_cambian.map(item => `<li>${item}</li>`).join('')}
             </ul>
@@ -813,13 +958,13 @@ function mostrarComparativo(comparativo) {
         ` : ''}
 
         <div class="downloads-section">
-            <h4><i class="fas fa-download"></i> Descargar</h4>
+            <h4><i class="fas fa-download" aria-hidden="true"></i> Descargar</h4>
             <div class="download-buttons">
                 <button class="btn-download excel" onclick="downloadExcel()">
-                    <i class="fas fa-file-excel"></i> Excel Comparativo
+                    <i class="fas fa-file-excel" aria-hidden="true"></i> Excel Comparativo
                 </button>
                 <button class="btn-download json" onclick="downloadJSON()">
-                    <i class="fas fa-file-code"></i> JSON
+                    <i class="fas fa-file-code" aria-hidden="true"></i> JSON
                 </button>
             </div>
         </div>
@@ -834,7 +979,7 @@ function mostrarError(errores) {
     resultadosDiv.innerHTML = `
         <div class="result-error">
             <div class="result-title">
-                <i class="fas fa-exclamation-circle"></i>
+                <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
                 Error generando presupuesto
             </div>
             <p>No se pudo generar el presupuesto.</p>
@@ -848,11 +993,14 @@ function mostrarError(errores) {
     resultadosDiv.className = 'results-container show result-error';
 }
 
-function formatCurrency(value) {
-    return new Intl.NumberFormat('es-AR', {
+function formatCurrency(valor) {
+    if (!valor && valor !== 0) return '-';
+    return new Intl.NumberFormat('en-US', {
         style: 'currency',
-        currency: 'ARS'
-    }).format(value);
+        currency: 'USD',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    }).format(valor);
 }
 
 function downloadExcel() {
@@ -1041,7 +1189,7 @@ function saveToHistory(blueprint, presupuesto) {
 function showToast(message, type = 'info') {
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check' : type === 'error' ? 'exclamation' : 'info'}"></i> ${message}`;
+    toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check' : type === 'error' ? 'exclamation' : 'info'}" aria-hidden="true"></i> ${message}`;
     document.body.appendChild(toast);
     
     setTimeout(() => toast.classList.add('show'), 10);
@@ -1049,4 +1197,49 @@ function showToast(message, type = 'info') {
         toast.classList.remove('show');
         setTimeout(() => toast.remove(), 300);
     }, 3000);
+}
+function initMap() {
+    // Coordenadas por defecto (Buenos Aires - Obelisco)
+    const defaultLat = -34.6037;
+    const defaultLng = -58.3816;
+
+    map = L.map('map').setView([defaultLat, defaultLng], 13);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    marker = L.marker([defaultLat, defaultLng], {
+        draggable: true
+    }).addTo(map);
+
+    // Actualizar coordenadas iniciales
+    document.getElementById('lat').value = defaultLat;
+    document.getElementById('lng').value = defaultLng;
+
+    marker.on('dragend', function(event) {
+        const position = marker.getLatLng();
+        updateLocationFromCoords(position.lat, position.lng);
+    });
+
+    map.on('click', function(event) {
+        const position = event.latlng;
+        marker.setLatLng(position);
+        updateLocationFromCoords(position.lat, position.lng);
+    });
+}
+
+async function updateLocationFromCoords(lat, lng) {
+    document.getElementById('lat').value = lat;
+    document.getElementById('lng').value = lng;
+
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+        const data = await response.json();
+        if (data && data.display_name) {
+            document.getElementById('ubicacion').value = data.display_name;
+        }
+    } catch (error) {
+        console.warn('Error en reverse geocoding:', error);
+    }
 }

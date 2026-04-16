@@ -14,39 +14,52 @@ export interface VisionExtractionResult {
 
 export async function extractFromImage(filePath: string): Promise<VisionExtractionResult> {
   if (!ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY no configurada. Usando mock.');
+    throw new Error('ANTHROPIC_API_KEY no configurada.');
   }
 
   const imageBuffer = fs.readFileSync(filePath);
   const base64Image = imageBuffer.toString('base64');
   const mimeType = getMimeType(filePath) as 'image/jpeg' | 'image/png';
 
-  const prompt = `Eres un experto en arquitectura y construcción. Analiza esta imagen de planos de vivienda y extrae la siguiente información en formato JSON:
-
-{
-  "superficie_cubierta_m2": número estimado,
-  "dormitorios": número,
-  "cantidad_banos": número,
-  "tiene_cochera": booleano,
-  "plantas": 1 | 2 | 3 | "pb_semisotano",
-  "tiene_escalera": booleano,
-  "estructura": "steel_frame" | "hormigon_armado" | "albanileria" | "madera" | "mixto",
-  "cubierta": "chapa_trapezoidal" | "chapa_acanalada" | "membrana_losa" | "teja_ceramica" | "techo_verde",
-  "categoria": "economico" | "estandar" | "premium" | "lujo",
-  "pisos": "porcelanato" | "ceramico" | "madera" | "microcemento" | "a_definir",
-  "aberturas": "aluminio_basico" | "aluminio_dvh" | "pvc" | "madera"
-}
-
-Para cada campo, asigna un nivel de confianza: "alta" si es claramente visible, "media" si se infiere con cierta ambigüedad, "baja" si es una suposición.
-
-Devuelve un JSON con dos objetos: "blueprint" con los campos extraídos (solo incluye campos detectados) y "confianza" con el nivel para cada campo.
-
-Además, incluye un array "notas" con observaciones sobre lo que se ve en los planos.`;
+  const prompt = `Eres un EXPERTO EN ARQUITECTURA ARGENTINA (arquitecto senior). 
+  Tu objetivo es analizar un PLANO o IMAGEN TÉCNICA para un presupuesto de construcción con PRECISIÓN ABSOLUTA.
+  
+  PASO 1: ANÁLISIS DE CONTEXTO
+  - Busca la ESCALA (ej: 1:100, 1:50) y las UNIDADES (m, cm, mm).
+  - Busca el "CUADRO DE SUPERFICIES" o "PLANILLA DE LOCALES" (esta es tu fuente primaria de verdad).
+  - Si no hay escala, busca objetos de referencia: puertas (estándar 0.80m), espesor de muros (0.15m o 0.30m), escalones (0.25m-0.28m).
+  
+  PASO 2: EXTRACCIÓN DE ÁREAS
+  - Identifica Superficie Cubierta, Semicubierta y Libre.
+  - Verifica matemáticamente: la suma de las áreas parciales debe coincidir con el total declarado.
+  
+  Devuelve EXCLUSIVAMENTE un objeto JSON:
+  {
+    "blueprint": {
+      "superficie_cubierta_m2": número (punto decimal),
+      "superficie_semicubierta_m2": número,
+      "escala_detectada": "1:100" | "1:50" | "desconocida",
+      "metodo_extraccion": "cuadro_superficies" | "calculo_grafico" | "inferencia",
+      "dormitorios": número,
+      "cantidad_banos": número,
+      "plantas": 1 | 2 | 3,
+      "estructura": "steel_frame" | "hormigon_armado" | "albanileria" | "madera",
+      "cubierta": "chapa" | "losa" | "teja",
+      "categoria": "economico" | "estandar" | "premium" | "lujo"
+    },
+    "confianza": { "campo": "alta" | "media" | "baja" },
+    "notas": [
+      "Explica brevemente tu razonamiento sobre la escala y cómo verificaste las áreas.",
+      "Menciona si detectaste inconsistencias entre el gráfico y la planilla."
+    ]
+  }
+  
+  REGLA DE ORO: La precisión en el m2 es crítica. Si hay dudas, explícalo en las notas.`;
 
   try {
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2000,
+      model: 'claude-3-5-sonnet-latest',
+      max_tokens: 1500,
       temperature: 0,
       messages: [
         {
@@ -96,42 +109,85 @@ Además, incluye un array "notas" con observaciones sobre lo que se ve en los pl
 }
 
 export async function extractFromPDF(filePath: string): Promise<VisionExtractionResult> {
-  // TODO: Integrar API real de Claude para PDFs (soporte de documentos)
-  // Por ahora devolvemos mock
-  console.log('[Vision] PDF mock para:', filePath);
-  return {
-    blueprint: {
-      superficie_cubierta_m2: 150,
-      dormitorios: 3,
-      cantidad_banos: 2,
-      tiene_cochera: true,
-      plantas: 1,
-      tiene_escalera: false,
-      estructura: "albanileria",
-      cubierta: "chapa_acanalada",
-      categoria: "estandar",
-      pisos: "ceramico",
-      aberturas: "aluminio_basico",
+  if (!ANTHROPIC_API_KEY) {
+    throw new Error('ANTHROPIC_API_KEY no configurada.');
+  }
+
+  const pdfBuffer = fs.readFileSync(filePath);
+  const base64Pdf = pdfBuffer.toString('base64');
+
+  const prompt = `Analiza este documento PDF (PLANO TÉCNICO MULTIPÁGINA) con precisión quirúrgica.
+  
+  PROCEDIMIENTO:
+  1. Identifica el "CUADRO DE SUPERFICIES" general en todas las páginas.
+  2. Si hay varias plantas, suma las superficies individuales para obtener el total del proyecto.
+  3. Detecta ESCALA y UNIDADES para validar visualmente si los m2 declarados tienen sentido.
+  
+  Devuelve EXCLUSIVAMENTE un JSON:
+  {
+    "blueprint": {
+      "superficie_cubierta_m2": número,
+      "superficie_semicubierta_m2": número,
+      "escala_detectada": string,
+      "metodo_extraccion": "cuadro_superficies" | "calculo_grafico",
+      "dormitorios": número,
+      "cantidad_banos": número,
+      "plantas": número,
+      "estructura": string,
+      "cubierta": string,
+      "categoria": string
     },
-    confianza: {
-      superficie_cubierta_m2: "media",
-      dormitorios: "alta",
-      cantidad_banos: "alta",
-      tiene_cochera: "alta",
-      plantas: "alta",
-      tiene_escalera: "alta",
-      estructura: "baja",
-      cubierta: "media",
-      categoria: "baja",
-      pisos: "baja",
-      aberturas: "baja",
-    },
-    notas: [
-      "PDF procesado con mock (API no implementada)",
-      "Estructura inferida de muros en plano, confirmar con cliente",
-      "Superficie estimada de planos con margen ±10%"
-    ],
-  };
+    "confianza": { "campo": "alta" | "media" | "baja" },
+    "notas": [
+      "Resumen por planta detectada.",
+      "Justificación técnica de la superficie extraída.",
+      "Advertencias sobre escala o legibilidad."
+    ]
+  }`;
+
+  try {
+    const message = await anthropic.messages.create({
+      model: 'claude-3-5-sonnet-latest',
+      max_tokens: 2000,
+      temperature: 0,
+       // betas: ["pdfs-2024-09-25"], // Beta para soporte nativo de PDF - comentado por error de tipo
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: base64Pdf,
+              },
+            } as any,
+            {
+              type: 'text',
+              text: prompt,
+            },
+          ],
+        },
+      ],
+    });
+
+    const content = message.content[0];
+    if (content.type !== 'text') throw new Error('Respuesta no es texto');
+
+    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No se encontró JSON');
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    return {
+      blueprint: parsed.blueprint || {},
+      confianza: parsed.confianza || {},
+      notas: parsed.notas || [],
+    };
+  } catch (error) {
+    console.error('[Vision PDF] Error:', error);
+    return { blueprint: {}, confianza: {}, notas: [`Error PDF: ${error}`] };
+  }
 }
 
 function getMimeType(filePath: string): string {

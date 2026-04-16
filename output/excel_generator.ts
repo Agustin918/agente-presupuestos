@@ -1,232 +1,147 @@
-import { Presupuesto, PresupuestoComparativo, ItemPresupuesto, VersionPresupuesto } from "../blueprint/schema";
-import { PRECIO_VIGENCIA_DIAS } from "../config/settings";
-import * as fs from "fs";
-import * as path from "path";
+import * as ExcelJS from 'exceljs';
+import * as fs from 'fs';
+import * as path from 'path';
+import { Presupuesto, PresupuestoComparativo, ItemPresupuesto } from '../blueprint/schema';
 
-const OUTPUT_DIR = "./output";
+export class ExcelGenerator {
+  async generarExcel(
+    presupuesto: Presupuesto,
+    nombreArchivo?: string,
+    comparativo?: PresupuestoComparativo
+  ): Promise<string> {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Agente IA Presupuestos';
+    workbook.lastModifiedBy = 'Agente IA Presupuestos';
+    workbook.created = new Date();
 
-function ensureDir(dir: string): void {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+    // 1. HOJA: RESUMEN EJECUTIVO
+    const sheetResumen = workbook.addWorksheet('00-Resumen Ejecutivo');
+    this.estilizarResumen(sheetResumen, presupuesto);
+
+    // 2. HOJA: DETALLE POR ETAPAS
+    const sheetDetalle = workbook.addWorksheet('01-Detalle de Obra');
+    this.estilizarDetalle(sheetDetalle, presupuesto);
+
+    // 3. HOJA: COMPARATIVO (si existe)
+    if (comparativo) {
+      const sheetComp = workbook.addWorksheet('02-Comparativo Calidad');
+      this.estilizarComparativo(sheetComp, comparativo);
+    }
+
+    // Guardar archivo
+    const rutaSalida = './output/general';
+    if (!fs.existsSync(rutaSalida)) fs.mkdirSync(rutaSalida, { recursive: true });
+
+    const fileName = nombreArchivo || `Presupuesto_${presupuesto.obra.replace(/\s+/g, '_')}.xlsx`;
+    const filePath = path.join(rutaSalida, fileName);
+
+    await workbook.xlsx.writeFile(filePath);
+    return filePath;
   }
-}
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-  }).format(value);
-}
-
-function getConfianzaColor(confianza: "alta" | "media" | "baja"): string {
-  switch (confianza) {
-    case "alta": return "#d4edda"; // verde claro
-    case "media": return "#fff3cd"; // amarillo claro
-    case "baja": return "#f8d7da"; // rojo claro
-    default: return "#ffffff";
-  }
-}
-
-function generateHtml(
-  presupuesto: Presupuesto,
-  comparativo?: PresupuestoComparativo,
-  versiones?: VersionPresupuesto[]
-): string {
-  const vencimiento = new Date();
-  vencimiento.setDate(vencimiento.getDate() + PRECIO_VIGENCIA_DIAS);
-
-  let html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Presupuesto: ${presupuesto.obra}</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 40px; }
-    h1 { color: #333; }
-    h2 { border-bottom: 2px solid #333; padding-bottom: 5px; }
-    .resumen { background: #f5f5f5; padding: 20px; margin-bottom: 30px; }
-    .resumen-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-    th { background: #333; color: white; }
-    tr:nth-child(even) { background: #f9f9f9; }
-    .confianza-alta { background-color: #d4edda; }
-    .confianza-media { background-color: #fff3cd; }
-    .confianza-baja { background-color: #f8d7da; }
-    .precio-desactualizado { color: #e74c3c; font-weight: bold; }
-    .comparativo { margin-top: 40px; }
-    .vencimiento { margin-top: 30px; color: #666; font-size: 14px; }
-    .version-cambio { background-color: #e9ecef; padding: 5px; margin: 2px 0; }
-  </style>
-</head>
-<body>
-  <h1>${presupuesto.obra}</h1>
-  <div class="resumen">
-    <div class="resumen-grid">
-      <div><strong>Fecha:</strong> ${presupuesto.fecha}</div>
-      <div><strong>Superficie:</strong> ${presupuesto.superficie_m2} m²</div>
-      <div><strong>Estructura:</strong> ${presupuesto.estructura}</div>
-      <div><strong>Categoría:</strong> ${presupuesto.categoria}</div>
-      <div><strong>Factor:</strong> ${presupuesto.factor_terminacion}x</div>
-      <div><strong>Total:</strong> ${formatCurrency(presupuesto.total_estimado)}</div>
-    </div>
-    <div style="margin-top: 15px;">
-      <strong>Precios:</strong> ${presupuesto.precios_frescos} frescos, ${presupuesto.precios_cache} del cache
-    </div>
-    <div style="margin-top: 10px;">
-      <strong>Confianza general:</strong> Alta: ${presupuesto.items.filter(i => i.confianza === "alta").length}, 
-      Media: ${presupuesto.items.filter(i => i.confianza === "media").length}, 
-      Baja: ${presupuesto.items.filter(i => i.confianza === "baja").length}
-    </div>
-  </div>
-
-  <h2>Detalle por Rubro</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Rubro</th>
-        <th>Descripción</th>
-        <th>Cantidad</th>
-        <th>Unidad</th>
-        <th>Precio Unit.</th>
-        <th>Subtotal</th>
-        <th>Confianza</th>
-        <th>Fuente</th>
-      </tr>
-    </thead>
-    <tbody>
-`;
-
-  for (const item of presupuesto.items) {
-    const confianzaClass = `confianza-${item.confianza}`;
-    const desactualizado = item.precio_desactualizado ? " precio-desactualizado" : "";
-    const nota = item.nota_confianza ? `<br><small>${item.nota_confianza}</small>` : "";
+  private estilizarResumen(sheet: ExcelJS.Worksheet, p: Presupuesto) {
+    sheet.columns = [{ width: 30 }, { width: 50 }];
     
-    html += `
-      <tr class="${confianzaClass}">
-        <td>${item.rubro}</td>
-        <td>${item.descripcion}</td>
-        <td>${item.cantidad}</td>
-        <td>${item.unidad}</td>
-        <td class="${desactualizado}">${formatCurrency(item.precio_unitario)}</td>
-        <td>${formatCurrency(item.subtotal)}</td>
-        <td>${item.confianza.toUpperCase()}${nota}</td>
-        <td>${item.fuente}<br><small>${item.fecha_precio}</small></td>
-      </tr>`;
+    // Título
+    sheet.mergeCells('A1:B1');
+    const titleCell = sheet.getCell('A1');
+    titleCell.value = 'INFORME TÉCNICO DE PRESUPUESTO';
+    titleCell.font = { name: 'Arial Black', size: 16, color: { argb: 'FFFFFFFF' } };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C3E50' } };
+    titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // Datos
+    const rows = [
+      ['PROYECTO:', p.obra],
+      ['FECHA:', p.fecha],
+      ['SUPERFICIE:', `${p.superficie_m2} m²`],
+      ['SISTEMA:', p.estructura.toUpperCase()],
+      ['CATEGORÍA:', p.categoria.toUpperCase()],
+      [''],
+      ['INVERSIÓN ESTIMADA TOTAL:', p.total_estimado],
+      ['COSTO POR METRO CUADRADO:', p.costo_m2],
+      ['DIVISA:', p.divisa],
+      [''],
+      ['AUDITORÍA DE PRECIOS'],
+      ['Precios verificados hoy:', p.precios_frescos],
+      ['Precios de base histórica:', p.precios_cache],
+      [''],
+      ['CONSISTENCIA TÉCNICA:', p.validacion_tecnica?.resultado.toUpperCase()]
+    ];
+
+    sheet.addRows(rows);
+
+    // Estilos de labels
+    sheet.getColumn(1).eachCell((cell) => {
+      cell.font = { bold: true };
+    });
+
+    // Color al total
+    const totalCell = sheet.getCell('B8');
+    totalCell.font = { bold: true, size: 14, color: { argb: 'FF27AE60' } };
+    totalCell.numFmt = '"$"#,##0.00';
   }
 
-  html += `
-    </tbody>
-    <tfoot>
-      <tr>
-        <td colspan="5"><strong>Total Estimado</strong></td>
-        <td colspan="3"><strong>${formatCurrency(presupuesto.total_estimado)}</strong></td>
-      </tr>
-    </tfoot>
-  </table>
-`;
+  private estilizarDetalle(sheet: ExcelJS.Worksheet, p: Presupuesto) {
+    const headers = ['RUBRO / ETAPA', 'DESCRIPCIÓN TÉCNICA', 'CANT.', 'UNID.', 'PU', 'SUBTOTAL', 'FUENTE (AUDITORÍA)', 'LINK'];
+    sheet.addRow(headers);
+    
+    // Estilo headers
+    sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2980B9' } };
 
-  if (comparativo) {
-    html += `
-  <div class="comparativo">
-    <h2>Comparativo por Categoría</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Categoría</th>
-          <th>Factor</th>
-          <th>Total</th>
-          <th>Diferencia vs Económico</th>
-          <th>Items que más cambian</th>
-        </tr>
-      </thead>
-      <tbody>
-`;
+    p.items.forEach(item => {
+      const row = sheet.addRow([
+        item.rubro,
+        item.descripcion,
+        item.cantidad,
+        item.unidad,
+        item.precio_unitario,
+        item.subtotal,
+        item.fuente,
+        item.fuente_url
+      ]);
 
-    for (const esc of comparativo.escenarios) {
-      html += `
-        <tr>
-          <td>${esc.categoria}</td>
-          <td>${esc.factor}x</td>
-          <td>${formatCurrency(esc.total_estimado)}</td>
-          <td>${esc.diferencia_vs_economico}</td>
-          <td>${esc.items_que_mas_cambian.join(", ")}</td>
-        </tr>`;
-    }
+      // Link clickable
+      if (item.fuente_url) {
+        row.getCell(8).value = { text: 'Ver Fuente', hyperlink: item.fuente_url };
+        row.getCell(8).font = { underline: true, color: { argb: 'FF2980B9' } };
+      }
+    });
 
-    html += `
-      </tbody>
-    </table>
-  </div>`;
+    // Formatos de número
+    sheet.getColumn(5).numFmt = '#,##0.00';
+    sheet.getColumn(6).numFmt = '#,##0.00';
+    
+    sheet.columns = [
+      { width: 25 }, { width: 40 }, { width: 10 }, { width: 8 }, { width: 15 }, { width: 15 }, { width: 25 }, { width: 15 }
+    ];
+
+    // Subtotales por categoría (opcional, aquí simplificado)
+    const lastRow = sheet.rowCount + 2;
+    sheet.getCell(`E${lastRow}`).value = 'TOTAL ESTIMADO:';
+    sheet.getCell(`E${lastRow}`).font = { bold: true };
+    sheet.getCell(`F${lastRow}`).value = p.total_estimado;
+    sheet.getCell(`F${lastRow}`).font = { bold: true };
+    sheet.getCell(`F${lastRow}`).numFmt = '"$"#,##0.00';
   }
 
-  if (versiones && versiones.length > 1) {
-    html += `
-  <div class="comparativo">
-    <h2>Historial de Versiones</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Versión</th>
-          <th>Fecha</th>
-          <th>Total</th>
-          <th>Resumen de Cambios</th>
-        </tr>
-      </thead>
-      <tbody>
-`;
+  private estilizarComparativo(sheet: ExcelJS.Worksheet, c: PresupuestoComparativo) {
+    sheet.addRow(['ANALISIS COMPARATIVO DE ESCENARIOS DE CALIDAD']);
+    sheet.addRow(['Escenario', 'Factor', 'Total Estimado', 'Variación %']);
+    
+    c.escenarios.forEach(e => {
+      sheet.addRow([
+        e.categoria.toUpperCase(),
+        e.factor,
+        e.total_estimado,
+        e.diferencia_vs_economico
+      ]);
+    });
 
-    for (const ver of versiones) {
-      html += `
-        <tr>
-          <td>${ver.version}</td>
-          <td>${ver.fecha}</td>
-          <td>${formatCurrency(ver.total)}</td>
-          <td>${ver.resumen_cambios || "Sin cambios"}</td>
-        </tr>`;
-    }
-
-    html += `
-      </tbody>
-    </table>
-  </div>`;
+    sheet.getColumn(3).numFmt = '"$"#,##0.00';
+    sheet.columns = [{ width: 20 }, { width: 10 }, { width: 20 }, { width: 20 }];
   }
-
-  html += `
-  <div class="vencimiento">
-    <p>Precio válido hasta: ${vencimiento.toLocaleDateString("es-AR")}</p>
-    <p><strong>Nota:</strong> Los rubros en color verde tienen alta confianza, amarillo media confianza, rojo baja confianza.</p>
-  </div>
-</body>
-</html>`;
-
-  return html;
 }
 
-export async function generarExcel(
-  presupuesto: Presupuesto | any,
-  obraNombre: string,
-  comparativo?: PresupuestoComparativo,
-  versiones?: VersionPresupuesto[]
-): Promise<string> {
-  ensureDir(OUTPUT_DIR);
-  const usuarioId = presupuesto.usuario_id || 'general';
-  const usuarioDir = path.join(OUTPUT_DIR, usuarioId);
-  ensureDir(usuarioDir);
-
-  const timestamp = new Date().toISOString().replace(/:/g, "-");
-  const safeName = obraNombre.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
-  const filename = `${safeName}_${timestamp}.html`;
-  const filepath = path.join(usuarioDir, filename);
-
-  const html = generateHtml(presupuesto, comparativo, versiones);
-  fs.writeFileSync(filepath, html, "utf-8");
-
-  console.log(`[Excel] Generado: ${filepath}`);
-  return filepath;
-}
-
-export const excelGenerator = {
-  generarExcel,
-};
+export const excelGenerator = new ExcelGenerator();

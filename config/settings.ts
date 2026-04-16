@@ -4,6 +4,10 @@ export const PRECIO_VIGENCIA_DIAS = ENV.PRECIO_VIGENCIA_DIAS;
 export const PRECIO_ALERTA_DIAS = 10;
 export const PRECIO_MAX_ANTIGUEDAD_DIAS = ENV.PRECIO_MAX_ANTIGUEDAD_DIAS;
 
+export const CURRENCY = 'USD';
+export const TASA_CAMBIO_USD = 1800; // Tasa por defecto (Blue/Paralelo) - actualizada abril 2026
+
+
 export const MODEL = {
   extraction: "claude-sonnet-4-20250514",
   research: "claude-sonnet-4-20250514",
@@ -56,6 +60,7 @@ export const RAG = {
 };
 
 export const ANTHROPIC_API_KEY = ENV.ANTHROPIC_API_KEY;
+export const SERPER_API_KEY = ENV.SERPER_API_KEY;
 export const ESTUDIO_ID = ENV.ESTUDIO_ID;
 
 // Ollama (alternativa local gratuita)

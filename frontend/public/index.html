@@ -6,34 +6,48 @@
     <title>Generador de Presupuestos de Construcción</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .qa-card { margin-top: 20px; padding: 20px; border-radius: 12px; border-left: 5px solid; }
+        .qa-critico { background: #fff5f5; border-color: #fc8181; color: #c53030; }
+        .qa-observaciones { background: #fffaf0; border-color: #f6ad55; color: #9c4221; }
+        .qa-aprobado { background: #f0fff4; border-color: #68d391; color: #276749; }
+        .chart-box { background: #fff; padding: 20px; border-radius: 15px; border: 1px solid #eee; margin-bottom: 30px; }
+        .dashboard-grid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 20px; margin-bottom: 30px; }
+        @media (max-width: 900px) { .dashboard-grid { grid-template-columns: 1fr; } }
+        
+        #map { height: 300px; width: 100%; border-radius: 12px; margin-top: 15px; border: 1px solid #ddd; z-index: 10; }
+        .map-container { position: relative; width: 100%; grid-column: span 2; }
+    </style>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1><i class="fas fa-home"></i> Sistema Multi-Agente de Presupuestos</h1>
+            <h1><i class="fas fa-home" aria-hidden="true"></i> Sistema Multi-Agente de Presupuestos</h1>
             <p class="subtitle">Genera presupuestos de construcción automatizados con IA</p>
             <div id="userInfo" class="user-info" style="display: none;">
                 <span id="userName"></span>
-                <button id="btnLogout" class="btn-logout"><i class="fas fa-sign-out-alt"></i></button>
+                <button id="btnLogout" class="btn-logout"><i class="fas fa-sign-out-alt" aria-hidden="true"></i></button>
             </div>
         </header>
 
         <div id="loginScreen" class="login-screen">
             <div class="login-card">
-                <h2><i class="fas fa-user-circle"></i> Iniciar Sesión</h2>
+                <h2><i class="fas fa-user-circle" aria-hidden="true"></i> Iniciar Sesión</h2>
                 <form id="loginForm">
                     <div class="form-group">
-                        <label for="loginEmail">Email</label>
-                        <input type="email" id="loginEmail" required placeholder="tu@email.com">
+                        <label for="loginEmail">Correo Electrónico</label>
+                        <input type="email" id="loginEmail" required placeholder="tu@correo.com">
                     </div>
                     <div class="form-group">
                         <label for="loginPassword">Contraseña</label>
                         <input type="password" id="loginPassword" required placeholder="••••••••">
                     </div>
                     <button type="submit" class="btn btn-primary btn-block">
-                        <i class="fas fa-sign-in-alt"></i> Ingresar
+                        <i class="fas fa-sign-in-alt" aria-hidden="true"></i> Ingresar
                     </button>
-                    <p class="login-hint">Usa cualquier email y contraseña para probar</p>
+                    <p class="login-hint">Usa cualquier correo electrónico y contraseña para probar</p>
                 </form>
             </div>
         </div>
@@ -67,15 +81,21 @@
                 <form id="blueprintForm">
                     <div class="wizard-content">
                         <div class="wizard-step active" data-step="1">
-                            <h2><i class="fas fa-file-alt"></i> Datos del Proyecto</h2>
+                            <h2><i class="fas fa-file-alt" aria-hidden="true"></i> Datos del Proyecto</h2>
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label for="nombre_obra">Nombre de la Obra *</label>
                                     <input type="text" id="nombre_obra" name="nombre_obra" required placeholder="Ej: Casa Pilar">
                                 </div>
                                 <div class="form-group">
-                                    <label for="ubicacion">Ubicación *</label>
+                                    <label for="ubicacion">Ubicación de la Obra *</label>
                                     <input type="text" id="ubicacion" name="ubicacion" required placeholder="Ej: Pilar, Buenos Aires">
+                                    <input type="hidden" id="lat" name="lat">
+                                    <input type="hidden" id="lng" name="lng">
+                                </div>
+                                <div class="map-container">
+                                    <small><i class="fas fa-map-pin"></i> Mové el marcador para precisar la ubicación y calcular el flete</small>
+                                    <div id="map"></div>
                                 </div>
                                 <div class="form-group">
                                     <label for="superficie_cubierta_m2">Superficie Cubierta (m²) *</label>
@@ -103,7 +123,7 @@
                                 </div>
                             </div>
 
-                            <h3><i class="fas fa-ruler-combined"></i> Distribución</h3>
+                            <h3><i class="fas fa-ruler-combined" aria-hidden="true"></i> Distribución</h3>
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label for="dormitorios">Dormitorios *</label>
@@ -123,7 +143,7 @@
                                     <label><input type="checkbox" id="tiene_galeria" name="tiene_galeria" checked> Galería</label>
                                 </div>
                                 <div class="form-group checkbox-inline">
-                                    <label><input type="checkbox" id="tiene_deck" name="tiene_deck"> Deck</label>
+                                    <label><input type="checkbox" id="tiene_deck" name="tiene_deck"> Plataforma de madera (Deck)</label>
                                 </div>
                             </div>
 
@@ -134,14 +154,14 @@
                                 </div>
                             </div>
 
-                            <h3><i class="fas fa-map-marked-alt"></i> Terreno</h3>
+                            <h3><i class="fas fa-map-marked-alt" aria-hidden="true"></i> Terreno</h3>
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label for="terreno_tipo">Tipo de Terreno *</label>
                                     <select id="terreno_tipo" name="terreno_tipo" required>
                                         <option value="lote_propio" selected>Lote propio</option>
                                         <option value="barrio_cerrado">Barrio Cerrado</option>
-                                        <option value="country">Country</option>
+                                        <option value="country">Barrio Privado (Country)</option>
                                         <option value="ph">PH</option>
                                         <option value="otro">Otro</option>
                                     </select>
@@ -162,7 +182,7 @@
                         </div>
 
                         <div class="wizard-step" data-step="2">
-                            <h2><i class="fas fa-building"></i> Sistema Constructivo</h2>
+                            <h2><i class="fas fa-building" aria-hidden="true"></i> Sistema Constructivo</h2>
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label for="estructura">Estructura *</label>
@@ -207,10 +227,10 @@
                             </div>
 
                             <div id="steelFrameSection" class="conditional-field" style="display: none;">
-                                <h3><i class="fas fa-layer-group"></i> Detalles Steel Frame</h3>
+                                <h3><i class="fas fa-layer-group" aria-hidden="true"></i> Detalles Steel Frame</h3>
                                 <div class="form-grid">
                                     <div class="form-group">
-                                        <label for="panel_espesor">Espesor del Panel *</label>
+                                        <label for="panel_espesor">Espesor del Panel * <i class="fas fa-info-circle tooltip-icon" aria-hidden="true" title="89mm es estándar. 140mm es recomendado para mayor aislación térmica o dimensiones grandes."></i></label>
                                         <select id="panel_espesor" name="panel_espesor">
                                             <option value="89">89 mm (Standard)</option>
                                             <option value="140">140 mm (Alta aislación)</option>
@@ -233,7 +253,44 @@
                                 </div>
                             </div>
 
-                            <h3><i class="fas fa-fence"></i> Cerco y Portón</h3>
+                            <div id="detalleTecnicoSection">
+                                <h3><i class="fas fa-tools" aria-hidden="true"></i> Especificaciones de Obra Grasa (v5.1)</h3>
+                                <div class="form-grid">
+                                    <div class="form-group" id="ladrilloGroup">
+                                        <label for="ladrillo_tipo">Tipo de Mampostería</label>
+                                        <select id="ladrillo_tipo" name="ladrillo_tipo">
+                                            <option value="hueco_18" selected>Ladrillo Hueco 18cm</option>
+                                            <option value="hueco_12">Ladrillo Hueco 12cm</option>
+                                            <option value="portante_18">Ladrillo Portante 18cm</option>
+                                            <option value="retak">Retak (HCCA)</option>
+                                            <option value="comun">Ladrillo Común</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="fundacion_tipo">Tipo de Fundación</label>
+                                        <select id="fundacion_tipo" name="fundacion_tipo">
+                                            <option value="platea" selected>Platea de Hormigón Armado</option>
+                                            <option value="zapata">Zapatas Corridas</option>
+                                            <option value="pilotines">Pilotines y Vigas de Fund.</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" id="entrepisoGroup">
+                                        <label for="entrepiso_tipo">Tipo de Entre-piso / Losa</label>
+                                        <select id="entrepiso_tipo" name="entrepiso_tipo">
+                                            <option value="viguetas_telgopor" selected>Viguetas y Telgopor</option>
+                                            <option value="viguetas_ceramico">Viguetas y Ladrillo Cerámico</option>
+                                            <option value="losa_maciza">Losa Maciza (H° A°)</option>
+                                            <option value="steel_deck">Steel Deck</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="fundacion_espesor_cm">Espesor Fundación/Losa (cm)</label>
+                                        <input type="number" id="fundacion_espesor_cm" name="fundacion_espesor_cm" min="10" max="50" value="20">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h3><i class="fas fa-fence" aria-hidden="true"></i> Cerco y Portón</h3>
                             <div class="form-grid">
                                 <div class="form-group checkbox-inline">
                                     <label><input type="checkbox" id="porton_cerco" name="porton_cerco" checked> Cerco y Portón</label>
@@ -251,7 +308,7 @@
                         </div>
 
                         <div class="wizard-step" data-step="3">
-                            <h2><i class="fas fa-paint-roller"></i> Terminaciones</h2>
+                            <h2><i class="fas fa-paint-roller" aria-hidden="true"></i> Terminaciones</h2>
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label for="categoria">Categoría *</label>
@@ -263,13 +320,13 @@
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label for="factor_terminacion">Factor Terminación</label>
+                                    <label for="factor_terminacion">Factor Terminación <i class="fas fa-info-circle tooltip-icon" aria-hidden="true" title="Multiplicador del costo base resultante de la categoría elegida. A mayor categoría, mayor el factor."></i></label>
                                     <input type="text" id="factor_terminacion_display" readonly value="1.35" class="readonly-field">
                                     <small>Se calcula automáticamente según categoría</small>
                                 </div>
                             </div>
 
-                            <h3><i class="fas fa-th-large"></i> Pisos y Aberturas</h3>
+                            <h3><i class="fas fa-th-large" aria-hidden="true"></i> Pisos y Aberturas</h3>
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label for="pisos">Pisos *</label>
@@ -294,12 +351,12 @@
                                 </div>
                             </div>
 
-                            <h3><i class="fas fa-balance-scale"></i> Comparar Escenarios</h3>
+                            <h3><i class="fas fa-balance-scale" aria-hidden="true"></i> Comparar Escenarios</h3>
                             <div class="form-grid">
                                 <div class="form-group checkbox-inline full-width">
                                     <label>
                                         <input type="checkbox" id="escenarios" name="escenarios">
-                                        Generar comparativa de categorías
+                                        Generar comparativa de categorías <i class="fas fa-info-circle tooltip-icon" aria-hidden="true" title="Creará presupuestos paralelos para todas las categorías (económico a lujo) para que puedas comparar costos directamente."></i>
                                     </label>
                                     <small>Genera presupuestos para las 4 categorías (económico a lujo) lado a lado</small>
                                 </div>
@@ -307,7 +364,7 @@
                         </div>
 
                         <div class="wizard-step" data-step="4">
-                            <h2><i class="fas fa-bolt"></i> Instalaciones</h2>
+                            <h2><i class="fas fa-bolt" aria-hidden="true"></i> Instalaciones</h2>
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label>Instalaciones *</label>
@@ -324,7 +381,7 @@
                                 </div>
                             </div>
 
-                            <h3><i class="fas fa-fire"></i> Calentador de Agua</h3>
+                            <h3><i class="fas fa-fire" aria-hidden="true"></i> Calentador de Agua</h3>
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label for="calentador_agua">Tipo *</label>
@@ -332,13 +389,13 @@
                                         <option value="termotanque_gas" selected>Termotanque a Gas</option>
                                         <option value="termotanque_electrico">Termotanque Eléctrico</option>
                                         <option value="calefon">Calefón</option>
-                                        <option value="heat_pump">Heat Pump</option>
+                                        <option value="heat_pump">Bomba de calor (Heat Pump)</option>
                                         <option value="solar">Solar Térmico</option>
                                     </select>
                                 </div>
                             </div>
 
-                            <h3><i class="fas fa-water"></i> Agua y Desagües</h3>
+                            <h3><i class="fas fa-water" aria-hidden="true"></i> Agua y Desagües</h3>
                             <div class="form-grid">
                                 <div class="form-group checkbox-inline">
                                     <label><input type="checkbox" id="tiene_cisterna" name="tiene_cisterna"> Cisterna</label>
@@ -348,7 +405,7 @@
                                 </div>
                             </div>
 
-                            <h3><i class="fas fa-clock"></i> Plazo y Modalidad</h3>
+                            <h3><i class="fas fa-clock" aria-hidden="true"></i> Plazo y Modalidad</h3>
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label for="plazo_meses">Plazo Estimado (meses) *</label>
@@ -364,7 +421,7 @@
                                 </div>
                             </div>
 
-                            <h3><i class="fas fa-file-upload"></i> Archivos de Proyecto (Opcional)</h3>
+                            <h3><i class="fas fa-file-upload" aria-hidden="true"></i> Archivos de Proyecto (Opcional)</h3>
                             <div class="form-group">
                                 <label for="archivos">Adjuntar archivos:</label>
                                 <input type="file" id="archivos" name="archivos" multiple 
@@ -394,40 +451,61 @@
 
                     <div class="wizard-nav">
                         <button type="button" id="btnPrev" class="btn btn-secondary" style="display: none;">
-                            <i class="fas fa-arrow-left"></i> Anterior
+                            <i class="fas fa-arrow-left" aria-hidden="true"></i> Anterior
                         </button>
                         <button type="button" id="btnNext" class="btn btn-primary">
-                            Siguiente <i class="fas fa-arrow-right"></i>
+                            Siguiente <i class="fas fa-arrow-right" aria-hidden="true"></i>
                         </button>
                         <button type="button" id="btnValidar" class="btn btn-secondary" style="display: none;">
-                            <i class="fas fa-check"></i> Validar
+                            <i class="fas fa-check" aria-hidden="true"></i> Validar
                         </button>
                         <button type="button" id="btnGenerar" class="btn btn-primary" style="display: none;">
-                            <i class="fas fa-calculator"></i> Generar Presupuesto
+                            <i class="fas fa-calculator" aria-hidden="true"></i> Generar Presupuesto
                         </button>
                         <button type="reset" class="btn btn-reset">
-                            <i class="fas fa-redo"></i> Reiniciar
+                            <i class="fas fa-redo" aria-hidden="true"></i> Reiniciar
                         </button>
                     </div>
                 </form>
 
                 <div id="progressOverlay" class="progress-overlay" style="display: none;">
-                    <div class="progress-content">
-                        <h3><i class="fas fa-cog fa-spin"></i> Procesando...</h3>
-                        <div id="progressSteps" class="progress-steps-list">
-                            <div class="progress-step" data-step="1">
-                                <i class="fas fa-circle"></i> Subiendo archivos...
-                            </div>
-                            <div class="progress-step" data-step="2">
-                                <i class="fas fa-circle"></i> Analizando archivos (puede tomar unos minutos)...
-                            </div>
-                            <div class="progress-step" data-step="3">
-                                <i class="fas fa-circle"></i> Buscando precios actualizados...
-                            </div>
-                            <div class="progress-step" data-step="4">
-                                <i class="fas fa-circle"></i> Generando presupuesto...
+                    <div class="progress-card">
+                        <div class="progress-header">
+                            <i class="fas fa-microchip progress-main-icon"></i>
+                            <div>
+                                <h3>Procesando con Inteligencia Artificial</h3>
+                                <p id="progressStatus">Analizando blueprint y buscando mejores precios...</p>
                             </div>
                         </div>
+                        
+                        <div class="progress-bar-container">
+                            <div id="progressBar" class="progress-bar-fill"></div>
+                        </div>
+
+                        <div id="progressSteps" class="progress-steps-grid">
+                            <div class="progress-step-item" data-step="1">
+                                <div class="step-icon"><i class="fas fa-cloud-upload-alt"></i></div>
+                                <span>Subida</span>
+                            </div>
+                            <div class="progress-step-item" data-step="2">
+                                <div class="step-icon"><i class="fas fa-file-contract"></i></div>
+                                <span>Análisis</span>
+                            </div>
+                            <div class="progress-step-item" data-step="3">
+                                <div class="step-icon"><i class="fas fa-search-dollar"></i></div>
+                                <span>Precios</span>
+                            </div>
+                            <div class="progress-step-item" data-step="4">
+                                <div class="step-icon"><i class="fas fa-drafting-compass"></i></div>
+                                <span>Síntesis</span>
+                            </div>
+                        </div>
+                        
+                        <div class="progress-footer">
+                            <small>Esto puede tomar hasta 30 segundos dependiendo de la complejidad</small>
+                        </div>
+                    </div>
+                </div>
                         <div id="progressDetail" class="progress-detail" style="margin-top: 15px; font-size: 0.85rem; color: #666;">
                             <!-- Detalles del análisis aparecerán aquí -->
                         </div>
@@ -436,7 +514,7 @@
                 </div>
 
                 <div id="extraccionInfo" class="extraccion-info" style="display: none; margin-top: 20px; padding: 15px; background: #e8f5e9; border-radius: 8px; border-left: 4px solid #4caf50;">
-                    <h4 style="margin: 0 0 10px 0;"><i class="fas fa-check-circle"></i> Datos Extraídos de Archivos</h4>
+                    <h4 style="margin: 0 0 10px 0;"><i class="fas fa-check-circle" aria-hidden="true"></i> Datos Extraídos de Archivos</h4>
                     <div id="extraccionCampos"></div>
                 </div>
 
@@ -445,27 +523,27 @@
 
             <div class="info-sidebar">
                 <div class="history-section">
-                    <h3><i class="fas fa-history"></i> Historial Reciente</h3>
+                    <h3><i class="fas fa-history" aria-hidden="true"></i> Historial Reciente</h3>
                     <div id="historyList" class="history-list">
                         <div class="loading-history">Cargando...</div>
                     </div>
                 </div>
 
-                <h3><i class="fas fa-lightbulb"></i> Cómo funciona</h3>
+                <h3><i class="fas fa-lightbulb" aria-hidden="true"></i> Cómo funciona</h3>
                 <div class="info-card">
-                    <h4><i class="fas fa-search"></i> 1. Extracción de datos</h4>
+                    <h4><i class="fas fa-search" aria-hidden="true"></i> 1. Extracción de datos</h4>
                     <p>El sistema analiza planos e imágenes para extraer automáticamente dimensiones y características.</p>
                 </div>
                 <div class="info-card">
-                    <h4><i class="fas fa-globe"></i> 2. Búsqueda de precios</h4>
+                    <h4><i class="fas fa-globe" aria-hidden="true"></i> 2. Búsqueda de precios</h4>
                     <p>Busca precios actualizados de materiales en internet, considerando inflación y ubicación.</p>
                 </div>
                 <div class="info-card">
-                    <h4><i class="fas fa-brain"></i> 3. Generación inteligente</h4>
+                    <h4><i class="fas fa-brain" aria-hidden="true"></i> 3. Generación inteligente</h4>
                     <p>Combina datos extraídos, precios actuales y obras históricas para generar el presupuesto.</p>
                 </div>
                 <div class="info-card">
-                    <h4><i class="fas fa-chart-line"></i> 4. Indicadores de confianza</h4>
+                    <h4><i class="fas fa-chart-line" aria-hidden="true"></i> 4. Indicadores de confianza</h4>
                     <p>Cada ítem incluye un indicador de confianza basado en la calidad de los datos de entrada.</p>
                 </div>
             </div>
@@ -474,9 +552,9 @@
         <footer>
             <p>Sistema Multi-Agente de Presupuestos v2.0 • Desarrollado para estudios de arquitectura</p>
             <p class="footer-links">
-                <a href="#"><i class="fas fa-question-circle"></i> Ayuda</a>
-                <a href="#"><i class="fas fa-book"></i> Documentación</a>
-                <a href="#"><i class="fas fa-code"></i> API</a>
+                <a href="#"><i class="fas fa-question-circle" aria-hidden="true"></i> Ayuda</a>
+                <a href="#"><i class="fas fa-book" aria-hidden="true"></i> Documentación</a>
+                <a href="#"><i class="fas fa-code" aria-hidden="true"></i> API</a>
             </p>
         </footer>
     </div>

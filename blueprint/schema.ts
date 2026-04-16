@@ -14,6 +14,10 @@ export type TipoCochera = "cubierta" | "semicubierta" | "sin_techar";
 export type TipoEscalera = "hormigon" | "metalica" | "madera";
 export type RevestimientoExterior = "revoque_fino" | "piedra" | "ladrillo_visto" | "simil_piedra" | "chapa" | "mixto";
 export type MaterialCerco = "mamposteria" | "metalico" | "madera" | "mixto";
+export type TipoLadrillo = "hueco_8" | "hueco_12" | "hueco_18" | "portante_12" | "portante_18" | "comun" | "retak";
+export type TipoFundacion = "platea" | "zapata" | "pilotines" | "bases_aisladas";
+export type TipoEntrepiso = "viguetas_telgopor" | "viguetas_ceramico" | "losa_maciza" | "steel_deck" | "madera";
+export type PerfilSteelFrame = "p_89" | "p_100" | "p_140";
 
 export const FACTOR_TERMINACION: Record<Categoria, number> = {
   economico: 1.0,
@@ -41,6 +45,8 @@ export interface Blueprint {
   
   archivos_fuente?: string[];
   confianza_extraccion?: Record<string, "alta" | "media" | "baja" | "manual">;
+  escala_detectada?: string;
+  metodo_extraccion?: "cuadro_superficies" | "calculo_grafico" | "inferencia" | "manual";
 
   nombre_obra: string;
   ubicacion: string;
@@ -85,6 +91,21 @@ export interface Blueprint {
   plazo_meses: number;
   modalidad: Modalidad;
   observaciones?: string;
+  especificaciones_tecnicas?: string[];
+
+  // Sección 7 — Detalle Técnico (v5.0)
+  detalle_constructivo: {
+    ladrillo_tipo?: TipoLadrillo;
+    ladrillo_espesor_cm?: number;
+    fundacion_tipo?: TipoFundacion;
+    fundacion_espesor_cm?: number;
+    fundacion_aislacion?: boolean;
+    entrepiso_tipo?: TipoEntrepiso;
+    steel_frame_perfil?: PerfilSteelFrame;
+    steel_frame_espesor_chapa?: 0.9 | 1.25;
+    cubierta_aislacion_termica?: string;
+    cubierta_membrana?: string;
+  };
 }
 
 export interface PrecioCache {
@@ -136,13 +157,17 @@ export interface ItemPresupuesto {
   precio_unitario: number;
   subtotal: number;
   fuente: string;
+  fuente_url: string;
   fecha_precio: string;
   confianza: "alta" | "media" | "baja";
   nota_confianza?: string;
   precio_desactualizado?: boolean;
+  categoria?: string; // Ej: "01-Obra Gruesa"
+  razonamiento_ia?: string; // Supuestos técnicos o criterios aplicados por la IA
 }
 
 export interface Presupuesto {
+  id?: string;
   obra: string;
   fecha: string;
   superficie_m2: number;
@@ -150,10 +175,23 @@ export interface Presupuesto {
   categoria: string;
   factor_terminacion: number;
   total_estimado: number;
+  costo_m2: number;
+  divisa: string;
   items: ItemPresupuesto[];
   precios_frescos: number;
   precios_cache: number;
   precios_vencidos: number;
+  comparativo?: PresupuestoComparativo;
+  validacion_tecnica?: {
+    resultado: 'ok' | 'alerta' | 'critico';
+    mensajes: string[];
+  };
+  reporte_qa?: {
+    status: 'aprobado' | 'con_observaciones' | 'critico';
+    alerta_roja: string[];
+    sugerencias: string[];
+  };
+  _blueprint?: Blueprint;
 }
 
 export interface PresupuestoComparativo {
@@ -173,4 +211,5 @@ export interface ExtractionResult {
   confianza: Record<string, "alta" | "media" | "baja" | "no_detectado">;
   archivos_procesados: string[];
   notas_extraccion: string[];
+  especificaciones_tecnicas?: string[];
 }

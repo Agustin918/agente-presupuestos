@@ -125,16 +125,27 @@ app.post('/api/presupuesto/generar', async (req, res) => {
   try {
     const { blueprint, archivos } = req.body;
     
+    console.log(`[API] Recibida solicitud para: ${blueprint?.nombre_obra || 'sin nombre'}`);
+    console.log(`[API] Archivos: ${archivos?.length || 0}`);
+    
     // Validar blueprint
+    if (!blueprint) {
+      return res.status(400).json({ error: 'Blueprint requerido' });
+    }
+    
     const validation = validarBlueprint(blueprint);
     if (!validation.valido) {
+      console.log('[API] Blueprint inválido:', validation.errores);
       return res.status(400).json({ error: 'Blueprint inválido', errores: validation.errores });
     }
 
-    console.log(`Generando presupuesto para: ${blueprint.nombre_obra}`);
+    console.log(`[API] Generando presupuesto para: ${blueprint.nombre_obra}`);
+    
+    // Extraer solo las rutas si recibimos objetos de archivo
+    const rutasArchivos = (archivos || []).map((a: any) => typeof a === 'string' ? a : a.ruta).filter(Boolean);
     
     // Llamar al orquestador
-    const resultado = await orchestrator.runWithFiles(archivos || [], blueprint);
+    const resultado = await orchestrator.runWithFiles(rutasArchivos, blueprint);
     
     if (resultado.exito) {
       // Guardar en historial
@@ -155,6 +166,7 @@ app.post('/api/presupuesto/generar', async (req, res) => {
       // Mantener solo los últimos 50
       saveHistorial(historial.slice(0, 50));
       
+      console.log(`[API] Éxito! Total: ${resultado.presupuesto?.total_estimado}`);
       res.json({
         exito: true,
         presupuesto: resultado.presupuesto,
@@ -162,15 +174,21 @@ app.post('/api/presupuesto/generar', async (req, res) => {
         mensaje: 'Presupuesto generado exitosamente'
       });
     } else {
+      console.log('[API] Falló:', resultado.errores);
       res.status(500).json({
         exito: false,
         errores: resultado.errores,
         mensaje: 'Error generando presupuesto'
       });
     }
-  } catch (error) {
-    console.error('Error generando presupuesto:', error);
-    res.status(500).json({ error: 'Error interno del servidor', detalles: (error as any).message });
+  } catch (error: any) {
+    console.error('[API] Error crítico:', error);
+    res.status(500).json({ 
+      exito: false,
+      error: 'Error interno del servidor', 
+      detalles: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 

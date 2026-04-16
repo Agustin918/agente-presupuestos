@@ -4,10 +4,14 @@ import { extractionAgent } from "./extraction_agent";
 import { researchAgent } from "./research_agent";
 import { synthesisAgent } from "./synthesis_agent";
 import { ingestaAgent } from "./ingesta_agent";
+import { QAAgent } from "./qa_agent";
 import { crearNuevaVersion } from "../blueprint/versioning";
-import { PRECIO_VIGENCIA_DIAS } from "../config/settings";
+import { PRECIO_VIGENCIA_DIAS, TASA_CAMBIO_USD as DEFAULT_TASA } from "../config/settings";
+import { fetchLiveExchangeRate } from "../utils/currency";
 import * as fs from "fs";
 import * as path from "path";
+import { getDb } from "../database/db";
+import { driveService } from "../services/google_drive";
 
 export interface LogEntry {
   timestamp: string;
@@ -75,56 +79,135 @@ async function runResearch(blueprint: Blueprint): Promise<Record<string, any>> {
 async function runSynthesis(blueprint: Blueprint, precios: Record<string, any>, confianzaExtraccion?: Record<string, any>): Promise<Presupuesto> {
   const start = Date.now();
   try {
-    const presupuesto = await synthesisAgent.generarPresupuesto(blueprint, precios, confianzaExtraccion);
+    // Obtener tasa de cambio en vivo si es posible
+    const tasaLive = await fetchLiveExchangeRate();
+    
+    const presupuesto = await synthesisAgent.generarPresupuesto(blueprint, precios, confianzaExtraccion, tasaLive);
     const duracion = Date.now() - start;
-    console.log(`[Orchestrator] Synthesis: presupuesto generado total ${presupuesto.total_estimado}`);
+    
+    const val = presupuesto.validacion_tecnica;
+    console.log(`[Orchestrator] Synthesis: ${presupuesto.total_estimado} USD (Validación: ${val?.resultado.toUpperCase()})`);
+    
     return presupuesto;
   } catch (error: any) {
     throw new Error(`Synthesis failed: ${error.message}`);
   }
 }
 
-function getMaterialesDelBlueprint(blueprint: Blueprint): string[] {
+export function getMaterialesDelBlueprint(blueprint: Blueprint): string[] {
   const materiales: string[] = [];
 
+  // Estructura
   if (blueprint.estructura === "steel_frame") {
     materiales.push("steel frame", "panel durlock", "tornillos");
   } else if (blueprint.estructura === "hormigon_armado") {
-    materiales.push("hormigon", "hierro 8mm", "hierro 6mm", "cemento");
+    materiales.push("hormigon", "hierro 8mm", "hierro 6mm", "cemento", "arena", "acero");
   } else if (blueprint.estructura === "albanileria") {
-    materiales.push("ladrillo", "cemento", "arena");
+    materiales.push("ladrillo", "cemento", "arena", "bloque");
   }
 
+  // Excavación y movimiento de suelos
+  if (blueprint.terreno.desnivel_metros && blueprint.terreno.desnivel_metros > 0) {
+    materiales.push("excavacion", "movimiento de suelos");
+  }
+
+  // Cubierta
   if (blueprint.cubierta.includes("chapa")) {
-    materiales.push("chapa", "tornillo autoperforante");
+    materiales.push("chapa trapezoidal", "chapa acanalada", "tornillo autoperforante");
+  } else if (blueprint.cubierta.includes("teja")) {
+    materiales.push("teja ceramica", "teja cementicia");
   }
+  materiales.push("estructura cubierta", "perfil metalico");
 
+  // Pisos
   if (blueprint.pisos === "porcelanato") {
-    materiales.push("porcelanato", "pegamento");
+    materiales.push("porcelanato", "pegamento porcelanato");
   } else if (blueprint.pisos === "ceramico") {
-    materiales.push("ceramico", "pegamento");
+    materiales.push("ceramico", "pegamento ceramico");
+  } else if (blueprint.pisos === "madera") {
+    materiales.push("piso madera", "entablonado");
+  } else if (blueprint.pisos === "microcemento") {
+    materiales.push("microcemento", "sellador");
   }
 
+  // Aberturas y vidrios
   if (blueprint.aberturas.includes("aluminio")) {
-    materiales.push("ventana aluminio");
+    materiales.push("ventana aluminio", "perfil aluminio", "vidrio dvh", "cristal");
   } else if (blueprint.aberturas === "pvc") {
-    materiales.push("ventana pvc");
+    materiales.push("ventana pvc", "vidrio dvh");
+  } else if (blueprint.aberturas === "madera") {
+    materiales.push("ventana madera", "vidrio");
   }
 
+  // Revestimientos y pintura
+  materiales.push("revoque fino", "revoque grueso", "pintura latex", "pintura esmalte");
+
+  // Cielorraso
+  if (blueprint.cielorraso === "suspendido") {
+    materiales.push("cielorraso suspendido", "durlock", "yeso");
+  }
+
+  // Carpintería interior
+  materiales.push("puerta interior", "placard", "ropero", "mueble cocina");
+
+  // Instalaciones
   if (blueprint.instalaciones.includes("electrica")) {
-    materiales.push("cable", "techa", "tablero");
+    materiales.push("cable electrico", "tablero electrico", "llave termica", "spot led");
   }
   if (blueprint.instalaciones.includes("sanitaria")) {
-    materiales.push("caño pvp", "grifería");
+    materiales.push("caño pvc", "caño cloaca", "griferia", "inodoro", "bidet", "ducha");
   }
   if (blueprint.instalaciones.includes("gas")) {
-    materiales.push("caño gas", "regulador");
+    materiales.push("caño gas", "regulador gas", "llave gas");
+  }
+  if (blueprint.instalaciones.includes("aire_acondicionado")) {
+    materiales.push("aire acondicionado split", "climatizacion", "split inverter");
+  }
+  if (blueprint.instalaciones.includes("calefaccion_radiante")) {
+    materiales.push("calefaccion radiante", "radiador", "caldera");
   }
   if (blueprint.instalaciones.includes("paneles_solares")) {
-    materiales.push("panel solar", "inversor");
+    materiales.push("panel solar", "inversor solar");
+  }
+  if (blueprint.instalaciones.includes("domotica")) {
+    materiales.push("domotica", "sensor", "central domotica");
   }
 
-  return materiales;
+  // Sanitarios y grifería
+  materiales.push("sanitario", "griferia cocina", "griferia baño");
+
+  // Calentador de agua
+  if (blueprint.calentador_agua === "termotanque_gas") {
+    materiales.push("termotanque gas");
+  } else if (blueprint.calentador_agua === "termotanque_electrico") {
+    materiales.push("termotanque electrico");
+  }
+
+  // Equipamiento
+  if (blueprint.cocina_equipada) {
+    materiales.push("cocina equipada", "mesada", "bajo mesada");
+  }
+  materiales.push("vanitory", "mueble baño");
+
+  // Exteriores
+  if (blueprint.porton_cerco) {
+    materiales.push("porton metalico", "cerco metalico");
+  }
+  if (blueprint.tiene_deck) {
+    materiales.push("deck madera", "entablonado exterior");
+  }
+  if (blueprint.tiene_galeria) {
+    materiales.push("galeria", "columnas galeria");
+  }
+  if (blueprint.tiene_quincho) {
+    materiales.push("quincho", "parrilla");
+  }
+
+  // Varios
+  materiales.push("aislante termico", "membrana", "hidrofugo");
+
+  // Eliminar duplicados y devolver
+  return [...new Set(materiales)];
 }
 
 export async function runWithFiles(
@@ -151,6 +234,7 @@ export async function runWithFiles(
   const mergedBlueprint = {
     ...extractionResult?.blueprint_parcial,
     ...blueprintParcial,
+    especificaciones_tecnicas: extractionResult?.especificaciones_tecnicas
   };
 
   const validationStart = Date.now();
@@ -185,6 +269,17 @@ export async function runWithFiles(
     presupuesto = await runSynthesis(blueprint, precios, extractionResult?.confianza);
     logs.push(log("synthesis_agent", "generarPresupuesto", "ok", Date.now() - synthesisStart));
 
+    // --- AGENTE AUDITOR (QA) ---
+    const qaStart = Date.now();
+    try {
+      const qaReport = await QAAgent.revisarPresupuesto(blueprint, presupuesto);
+      presupuesto.reporte_qa = qaReport;
+      logs.push(log("qa_agent", "revisarPresupuesto", qaReport.status, Date.now() - qaStart));
+      console.log(`[Orchestrator] Auditoría QA terminada: ${qaReport.status.toUpperCase()}`);
+    } catch (qaErr: any) {
+      console.warn(`[Orchestrator] Error en Auditoría QA: ${qaErr.message}`);
+    }
+
     if (blueprint.escenarios) {
       const compStart = Date.now();
       comparativo = await synthesisAgent.generarPresupuestoComparativo(blueprint);
@@ -203,6 +298,52 @@ export async function runWithFiles(
     };
   }
 
+  // --- PERSISTENCIA EN BASE DE DATOS ---
+  try {
+    const db = await getDb();
+    
+    // 1. Guardar/Actualizar Proyecto
+    await db.run(`
+      INSERT INTO proyectos (id, nombre_obra, ubicacion, usuario_id, estudio_id, fecha_creacion, blueprint_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        nombre_obra = excluded.nombre_obra,
+        blueprint_json = excluded.blueprint_json
+    `, [
+      blueprint.id,
+      blueprint.nombre_obra,
+      blueprint.ubicacion,
+      blueprint.usuario_id,
+      blueprint.estudio_id,
+      new Date().toISOString(),
+      JSON.stringify(blueprint)
+    ]);
+
+    // 2. Guardar Versión de Presupuesto
+    await db.run(`
+      INSERT INTO presupuestos (id, proyecto_id, version, fecha, total_estimado, costo_m2, divisa, datos_json, validacion_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      `${blueprint.id}_v${blueprint.version}`,
+      blueprint.id,
+      blueprint.version,
+      presupuesto.fecha,
+      presupuesto.total_estimado,
+      presupuesto.costo_m2,
+      presupuesto.divisa,
+      JSON.stringify(presupuesto),
+      JSON.stringify({
+        validacion_tecnica: presupuesto.validacion_tecnica,
+        reporte_qa: presupuesto.reporte_qa
+      })
+    ]);
+
+    console.log(`[Orchestrator] Persistencia en DB exitosa para ${blueprint.id} v${blueprint.version}`);
+  } catch (dbError: any) {
+    console.error(`[Orchestrator] Error en persistencia DB: ${dbError.message}`);
+    // No bloqueamos el flujo si falla la DB, seguimos con el archivo JSON
+  }
+
   ensureDir(OUTPUT_DIR);
   const usuarioDir = path.join(OUTPUT_DIR, blueprint.usuario_id);
   ensureDir(usuarioDir);
@@ -211,6 +352,20 @@ export async function runWithFiles(
   const outputFile = path.join(usuarioDir, `${blueprint.id}_v${blueprint.version}_${timestamp}.json`);
   fs.writeFileSync(outputFile, JSON.stringify({ presupuesto, comparativo, extractionResult }, null, 2));
   logs.push(log("orchestrator", "save", "ok", 0, `Guardado en ${outputFile}`));
+
+  // --- 10. SINCRONIZACIÓN CON GOOGLE DRIVE (PRO) ---
+  try {
+    const folderId = await driveService.createFolderStructure(blueprint.estudio_id, blueprint.nombre_obra);
+    if (folderId) {
+      await driveService.uploadFile(outputFile, `Presupuesto_${blueprint.nombre_obra}_v${blueprint.version}.json`, folderId);
+      if (presupuesto.reporte_qa) {
+        presupuesto.reporte_qa.sugerencias.push("📁 Sincronizado correctamente con tu Google Drive.");
+      }
+      console.log(`[Orchestrator] Drive Sync ok: ${blueprint.nombre_obra}`);
+    }
+  } catch (driveErr: any) {
+    console.warn(`[Orchestrator] Drive Sync falló: ${driveErr.message}`);
+  }
 
   return {
     exito: true,
