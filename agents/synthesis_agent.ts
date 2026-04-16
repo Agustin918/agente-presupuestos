@@ -48,7 +48,8 @@ export async function generarPresupuesto(
     if (val && typeof val === 'object' && 'precio' in val) {
       let precio = val.precio;
       // SIEMPRE TRABAJAMOS EN USD INTERNAMENTE
-      if (val.unidad === 'ARS' || val.unidad === 'pesos' || precio > 5000) { // Heurística: si es mayor a 5000 es ARS
+      // Cualquier precio > 200 en ARS (típico precio de material) se considera ARS
+      if (precio > 200) { // Materiales construcción siempre > 200 ARS
         precio = convertirArsAUsd(precio, tasaCambio);
       }
       preciosUSD[key] = {

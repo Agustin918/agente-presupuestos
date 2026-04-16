@@ -14,6 +14,7 @@ import { getDb } from "../database/db";
 import { driveService } from "../services/google_drive";
 import { excelGenerator } from "../output/excel_generator";
 import { pdfGenerator } from "../output/pdf_generator";
+import { googleSheetsService } from "../services/google_sheets_service";
 
 export interface LogEntry {
   timestamp: string;
@@ -362,6 +363,13 @@ export async function runWithFiles(
     
     logs.push(log("orchestrator", "export_excel", "ok", 0, `Excel: ${excelPath}`));
     logs.push(log("orchestrator", "export_pdf", "ok", 0, `PDF: ${pdfPath}`));
+
+    // --- SINCRONIZACIÓN GOOGLE SHEETS (v7.5) ---
+    const sheetsUrl = await googleSheetsService.exportarPresupuesto(presupuesto);
+    if (sheetsUrl) {
+      logs.push(log("orchestrator", "google_sheets_sync", "ok", 0, `Link: ${sheetsUrl}`));
+      (presupuesto as any).google_sheets_url = sheetsUrl;
+    }
   } catch (exportErr: any) {
     console.error(`[Orchestrator] Error en exportación: ${exportErr.message}`);
     logs.push(log("orchestrator", "export", "error", 0, exportErr.message));
