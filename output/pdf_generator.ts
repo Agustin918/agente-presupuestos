@@ -34,44 +34,41 @@ function generateHtml(
   <meta charset="UTF-8">
   <title>Presupuesto: ${presupuesto.obra}</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
-    body { font-family: 'Inter', sans-serif; margin: 0; padding: 40px; color: #2d3748; background: #fff; line-height: 1.5; }
-    .page-header { border-bottom: 2px solid #1a3a5f; padding-bottom: 20px; margin-bottom: 40px; }
-    .studio-name { font-size: 1.4rem; font-weight: 700; color: #1a3a5f; letter-spacing: 1px; text-transform: uppercase; }
-    .doc-type { font-size: 0.85rem; color: #718096; margin-top: 5px; }
-    h1 { font-size: 2.2rem; font-weight: 300; color: #1a3a5f; margin: 30px 0 10px 0; }
-    .project-meta { font-size: 0.9rem; color: #4a5568; margin-bottom: 40px; display: flex; justify-content: space-between; }
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; margin: 0; padding: 50px; color: #1e293b; background: #fff; line-height: 1.6; }
+    .page-header { border-bottom: 4px solid #0f172a; padding-bottom: 30px; margin-bottom: 50px; display: flex; justify-content: space-between; align-items: center; }
+    .studio-name { font-size: 1.6rem; font-weight: 800; color: #0f172a; letter-spacing: -1px; text-transform: uppercase; }
+    .studio-name span { color: #00f2ff; }
+    .doc-type { font-size: 0.75rem; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; }
     
-    .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 40px; }
-    .card { padding: 20px; border-radius: 4px; border: 1px solid #e2e8f0; }
-    .card-total { background: #1a3a5f; color: white; border: none; }
-    .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; display: block; opacity: 0.8; }
-    .value { font-size: 1.8rem; font-weight: 700; }
+    h1 { font-size: 3rem; font-weight: 200; color: #0f172a; margin: 0 0 10px 0; letter-spacing: -2px; }
+    .project-meta { font-size: 0.85rem; color: #64748b; margin-bottom: 50px; border-top: 1px solid #f1f5f9; padding-top: 15px; }
     
-    .qa-section { background: #f7fafc; padding: 20px; border-radius: 4px; border-left: 4px solid #3182ce; margin-bottom: 40px; }
-    .qa-title { font-weight: 700; font-size: 0.9rem; margin-bottom: 10px; color: #2c5282; display: flex; align-items: center; }
-    .qa-list { margin: 0; padding-left: 20px; font-size: 0.85rem; color: #4a5568; }
-
-    .category-group { margin-bottom: 50px; page-break-inside: avoid; }
-    .category-header { border-bottom: 1px solid #1a3a5f; padding: 10px 0; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-end; }
-    .category-header h3 { margin: 0; font-size: 1.2rem; font-weight: 600; color: #1a3a5f; }
-    .category-subtotal { font-size: 0.95rem; font-weight: 600; color: #4a5568; }
+    .dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px; margin-bottom: 50px; }
+    .card { padding: 25px; border-radius: 16px; background: #f8fafc; border: 1px solid #f1f5f9; }
+    .card-total { background: #0f172a; color: white; border: none; grid-column: span 1; }
+    .label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; display: block; color: inherit; opacity: 0.7; font-weight: 700; }
+    .value { font-size: 1.8rem; font-weight: 800; letter-spacing: -1px; }
     
-    table { width: 100%; border-collapse: collapse; }
-    th { text-align: left; font-size: 0.7rem; color: #a0aec0; text-transform: uppercase; padding: 10px 0; border-bottom: 1px solid #edf2f7; }
-    td { padding: 15px 0; border-bottom: 1px solid #f7fafc; font-size: 0.85rem; }
-    .item-rubro { font-weight: 600; color: #2d3748; }
-    .item-desc { color: #718096; font-size: 0.75rem; margin-top: 3px; }
-    .item-price { text-align: right; font-weight: 600; }
-    .item-reasoning { font-size: 0.65rem; color: #a0aec0; font-style: italic; margin-top: 2px; }
+    .category-group { margin-bottom: 60px; page-break-inside: avoid; }
+    .category-header { background: #0f172a; padding: 12px 20px; margin-bottom: 0; border-radius: 8px 8px 0 0; }
+    .category-header h3 { margin: 0; font-size: 0.9rem; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: 0.05em; }
     
-    .footer { margin-top: 60px; font-size: 0.75rem; color: #a0aec0; border-top: 1px solid #edf2f7; padding-top: 20px; }
+    table { width: 100%; border-collapse: collapse; background: #fff; }
+    th { text-align: left; font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; padding: 15px 20px; border-bottom: 1px solid #f1f5f9; }
+    td { padding: 20px; border-bottom: 1px solid #f1f5f9; font-size: 0.85rem; vertical-align: top; }
+    .item-rubro { font-weight: 700; color: #0f172a; font-size: 0.95rem; }
+    .item-desc { color: #64748b; font-size: 0.75rem; margin-top: 5px; max-width: 400px; }
+    .item-price { text-align: right; font-weight: 800; color: #0f172a; font-size: 1rem; }
+    .item-reasoning { font-size: 0.65rem; color: #94a3b8; font-style: italic; margin-top: 8px; border-left: 2px solid #e2e8f0; padding-left: 10px; }
+    
+    .footer { margin-top: 100px; padding-top: 30px; border-top: 1px solid #f1f5f9; display: flex; justify-content: space-between; font-size: 0.7rem; color: #94a3b8; }
   </style>
 </head>
 <body>
   <div class="page-header">
-    <div class="studio-name">Estudio de Arquitectura</div>
-    <div class="doc-type">Memoria Presupuestaria y Técnica • Informe IA v3.0</div>
+    <div class="studio-name">AGUSTÍN<span>STUDIO</span></div>
+    <div class="doc-type">Libro de Obra Inteligente • Reporte Técnico v9.0</div>
   </div>
 
   <h1>${presupuesto.obra}</h1>
