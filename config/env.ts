@@ -12,5 +12,7 @@ export const ENV = {
   MCP_FILESYSTEM: process.env.MCP_FILESYSTEM === 'true',
   MCP_MEMORY: process.env.MCP_MEMORY === 'true',
   MCP_GOOGLE_DRIVE: process.env.MCP_GOOGLE_DRIVE === 'false',
+  MCP_APIFY: process.env.MCP_APIFY === 'true',
   SERPER_API_KEY: process.env.SERPER_API_KEY || '',
+  APIFY_API_TOKEN: process.env.APIFY_API_TOKEN || '',
 };

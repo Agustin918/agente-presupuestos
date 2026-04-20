@@ -5,6 +5,8 @@ import { researchAgent } from "../agents/research_agent";
 import { synthesisAgent } from "../agents/synthesis_agent";
 import { ingestaAgent, ResultadoIngesta } from "../agents/ingesta_agent";
 import { MCPS } from "../config/settings";
+import { getApifyTools, registerApifyMCPServer } from "./apify_server";
+import { analyzeBlueprintWithApify, BlueprintAnalysisResult } from "../services/apify_blueprint";
 
 export interface MCPTool {
   name: string;
@@ -51,6 +53,13 @@ if (MCPS.filesystem || true) {
 }
 
 if (MCPS.memory || true) {
+  if (MCPS.apify) {
+    const apifyTools = getApifyTools();
+    for (const apifyTool of apifyTools) {
+      tools.push(apifyTool as any);
+    }
+  }
+
   tools.push({
     name: "generar_presupuesto",
     description: "Genera un presupuesto de construcción completo a partir de archivos y/o blueprint",

@@ -3,6 +3,7 @@ import { PRECIO_VIGENCIA_DIAS } from "../config/settings";
 import { formatCurrency } from "../utils/currency";
 import * as fs from "fs";
 import * as path from "path";
+import { chromium } from "playwright";
 
 const OUTPUT_DIR = "./output";
 
@@ -35,31 +36,31 @@ function generateHtml(
   <title>Presupuesto: ${presupuesto.obra}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap');
-    body { font-family: 'Plus Jakarta Sans', sans-serif; margin: 0; padding: 50px; color: #1e293b; background: #fff; line-height: 1.6; }
-    .page-header { border-bottom: 4px solid #0f172a; padding-bottom: 30px; margin-bottom: 50px; display: flex; justify-content: space-between; align-items: center; }
-    .studio-name { font-size: 1.6rem; font-weight: 800; color: #0f172a; letter-spacing: -1px; text-transform: uppercase; }
-    .studio-name span { color: #00f2ff; }
-    .doc-type { font-size: 0.75rem; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; margin: 0; padding: 50px; color: #000000; background: #fff; line-height: 1.6; }
+    .page-header { border-bottom: 2px solid #000000; padding-bottom: 30px; margin-bottom: 50px; display: flex; justify-content: space-between; align-items: center; }
+    .studio-name { font-size: 1.6rem; font-weight: 800; color: #000000; letter-spacing: -1px; text-transform: uppercase; }
+    .studio-name span { font-weight: 300; }
+    .doc-type { font-size: 0.75rem; color: #475569; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; }
     
-    h1 { font-size: 3rem; font-weight: 200; color: #0f172a; margin: 0 0 10px 0; letter-spacing: -2px; }
-    .project-meta { font-size: 0.85rem; color: #64748b; margin-bottom: 50px; border-top: 1px solid #f1f5f9; padding-top: 15px; }
+    h1 { font-size: 3rem; font-weight: 200; color: #000000; margin: 0 0 10px 0; letter-spacing: -2px; }
+    .project-meta { font-size: 0.85rem; color: #475569; margin-bottom: 50px; border-top: 1px solid #e2e8f0; padding-top: 15px; }
     
     .dashboard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px; margin-bottom: 50px; }
-    .card { padding: 25px; border-radius: 16px; background: #f8fafc; border: 1px solid #f1f5f9; }
-    .card-total { background: #0f172a; color: white; border: none; grid-column: span 1; }
+    .card { padding: 25px; border-radius: 8px; background: #ffffff; border: 1px solid #e2e8f0; }
+    .card-total { background: #000000; color: white; border: none; grid-column: span 1; }
     .label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; display: block; color: inherit; opacity: 0.7; font-weight: 700; }
     .value { font-size: 1.8rem; font-weight: 800; letter-spacing: -1px; }
     
     .category-group { margin-bottom: 60px; page-break-inside: avoid; }
-    .category-header { background: #0f172a; padding: 12px 20px; margin-bottom: 0; border-radius: 8px 8px 0 0; }
+    .category-header { background: #000000; padding: 12px 20px; margin-bottom: 0; border-radius: 4px 4px 0 0; }
     .category-header h3 { margin: 0; font-size: 0.9rem; font-weight: 700; color: #fff; text-transform: uppercase; letter-spacing: 0.05em; }
     
     table { width: 100%; border-collapse: collapse; background: #fff; }
-    th { text-align: left; font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; padding: 15px 20px; border-bottom: 1px solid #f1f5f9; }
-    td { padding: 20px; border-bottom: 1px solid #f1f5f9; font-size: 0.85rem; vertical-align: top; }
-    .item-rubro { font-weight: 700; color: #0f172a; font-size: 0.95rem; }
-    .item-desc { color: #64748b; font-size: 0.75rem; margin-top: 5px; max-width: 400px; }
-    .item-price { text-align: right; font-weight: 800; color: #0f172a; font-size: 1rem; }
+    th { text-align: left; font-size: 0.65rem; color: #475569; text-transform: uppercase; padding: 15px 20px; border-bottom: 1px solid #e2e8f0; }
+    td { padding: 20px; border-bottom: 1px solid #f8fafc; font-size: 0.85rem; vertical-align: top; }
+    .item-rubro { font-weight: 700; color: #000000; font-size: 0.95rem; }
+    .item-desc { color: #475569; font-size: 0.75rem; margin-top: 5px; max-width: 400px; }
+    .item-price { text-align: right; font-weight: 800; color: #000000; font-size: 1rem; }
     .item-reasoning { font-size: 0.65rem; color: #94a3b8; font-style: italic; margin-top: 8px; border-left: 2px solid #e2e8f0; padding-left: 10px; }
     
     .footer { margin-top: 100px; padding-top: 30px; border-top: 1px solid #f1f5f9; display: flex; justify-content: space-between; font-size: 0.7rem; color: #94a3b8; }
@@ -183,29 +184,35 @@ export async function generarPDF(
   try {
     const htmlContent = generateHtml(presupuesto, comparativo);
     
-    const pdfHtml = htmlContent.replace('</html>', `
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-      <script>
-        window.onload = function() {
-          const element = document.body;
-          const opt = {
-            margin: 10,
-            filename: '${obraNombre}_Presupuesto.pdf',
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2 },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-          };
-          html2pdf().set(opt).from(element).save();
-        };
-      </script>
-    </body></html>`);
+    // Crear archivo HTML temporal
+    const tempHtmlPath = filepath.replace('.pdf', '_temp.html');
+    fs.writeFileSync(tempHtmlPath, htmlContent);
     
-    const htmlPath = filepath.replace('.pdf', '_preview.html');
-    fs.writeFileSync(htmlPath, pdfHtml);
+    console.log(`[PDF] Renderizando documento técnico nativo para: ${obraNombre}...`);
     
-    return htmlPath;
+    // Renderizado Headless con Playwright para asegurar PDF real
+    const browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage();
+    
+    const uri = `file:///${path.resolve(tempHtmlPath).replace(/\\/g, '/')}`;
+    await page.goto(uri, { waitUntil: 'networkidle' });
+    
+    await page.pdf({
+      path: filepath,
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '15mm', right: '15mm', bottom: '15mm', left: '15mm' }
+    });
+    
+    await browser.close();
+    
+    // Limpieza
+    if (fs.existsSync(tempHtmlPath)) fs.unlinkSync(tempHtmlPath);
+    
+    console.log(`[PDF] Libro de Obra (PDF) listo: ${filepath}`);
+    return filepath;
   } catch (error) {
-    console.error('[PDF] Error generando:', error);
+    console.error('[PDF] Error generando documento nativo:', error);
     return filepath;
   }
 }

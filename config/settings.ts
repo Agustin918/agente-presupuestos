@@ -26,6 +26,7 @@ export const MCPS = {
   filesystem: ENV.MCP_FILESYSTEM,
   memory: ENV.MCP_MEMORY,
   googleDrive: ENV.MCP_GOOGLE_DRIVE,
+  apify: ENV.MCP_APIFY,
 };
 
 export const DATA_PATHS = {
@@ -64,5 +65,13 @@ export const SERPER_API_KEY = ENV.SERPER_API_KEY;
 export const ESTUDIO_ID = ENV.ESTUDIO_ID;
 
 // Ollama (alternativa local gratuita)
-export const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
+export const OLLAMA_URL = process.env.OLLAMA_BASE_URL || process.env.OLLAMA_URL || 'http://localhost:11434';
 export const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3';
+export const OLLAMA_API_KEY = process.env.OLLAMA_API_KEY || '';
+export const OLLAMA_ENABLED = process.env.OLLAMA_ENABLED === 'true';
+
+// OpenRouter (alternativa cloud)
+export const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
+export const OPENROUTER_ENABLED = process.env.OPENROUTER_ENABLED === 'true';
+export const OPENROUTER_URL = process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
+export const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'anthropic/claude-sonnet-4-20250514';

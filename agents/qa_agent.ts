@@ -1,10 +1,56 @@
 import { Blueprint, Presupuesto } from "../blueprint/schema";
 import { Anthropic } from "@anthropic-ai/sdk";
-import { ANTHROPIC_API_KEY, MODEL } from "../config/settings";
+import { ANTHROPIC_API_KEY, MODEL, OPENROUTER_API_KEY, OPENROUTER_ENABLED, OPENROUTER_URL, OPENROUTER_MODEL, OLLAMA_URL, OLLAMA_MODEL, OLLAMA_ENABLED } from "../config/settings";
+import axios from "axios";
 
 const anthropic = new Anthropic({
   apiKey: ANTHROPIC_API_KEY,
 });
+
+async function callOpenRouter(prompt: string): Promise<any> {
+  if (!OPENROUTER_API_KEY) throw new Error("No hay API key de OpenRouter");
+  const res = await axios.post(
+    `${OPENROUTER_URL}/chat/completions`,
+    {
+      model: OPENROUTER_MODEL,
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 1000,
+      temperature: 0,
+    },
+    {
+      headers: {
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+  const text = res.data.choices[0].message.content;
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("No se encontró JSON en respuesta");
+  return JSON.parse(jsonMatch[0]);
+}
+
+async function callOllama(prompt: string): Promise<any> {
+  const modelToUse = "llama3.2";
+  const res = await axios.post(
+    `${OLLAMA_URL}/api/chat`,
+    {
+      model: modelToUse,
+      messages: [{ role: "user", content: prompt }],
+      stream: false,
+    }
+  );
+  const text = res.data.message?.content;
+  if (!text) {
+    throw new Error("No hay contenido en respuesta de Ollama");
+  }
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    console.log("[QA Agent] Respuesta de Ollama (no JSON):", text.substring(0, 300));
+    throw new Error("No se encontró JSON en respuesta");
+  }
+  return JSON.parse(jsonMatch[0]);
+}
 
 export interface QAReport {
   status: 'aprobado' | 'con_observaciones' | 'critico';
@@ -60,8 +106,28 @@ export class QAAgent {
       if (!jsonMatch) throw new Error("No se encontró JSON en respuesta de QA");
 
       return JSON.parse(jsonMatch[0]) as QAReport;
-    } catch (error) {
-      console.error("[QA Agent] Error en revisión:", error);
+    } catch (error: any) {
+      console.error("[QA Agent] Error con Anthropic:", error.message);
+      
+      if (OPENROUTER_ENABLED && OPENROUTER_API_KEY) {
+        console.log("[QA Agent] Intentando con OpenRouter...");
+        try {
+          return await callOpenRouter(prompt);
+        } catch (orError: any) {
+          console.error("[QA Agent] OpenRouter falló:", orError.message);
+        }
+      }
+      
+      // Fallback a Ollama
+      if (OLLAMA_ENABLED) {
+        console.log("[QA Agent] Intentando con Ollama...");
+        try {
+          return await callOllama(prompt);
+        } catch (ollamaError: any) {
+          console.error("[QA Agent] Ollama falló:", ollamaError.message);
+        }
+      }
+      
       return {
         status: 'con_observaciones',
         alerta_roja: [],

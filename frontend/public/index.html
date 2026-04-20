@@ -5,14 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Architect Intel | Presupuestación de Vanguardia</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;600;800&display=swap" rel="stylesheet">
+    <!-- Leaflet CSS for Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root {
-            --bg-color: #05070a;
-            --accent-color: #00f2ff;
-            --glass-bg: rgba(255, 255, 255, 0.03);
-            --glass-border: rgba(255, 255, 255, 0.08);
-            --text-main: #f8fafc;
-            --text-sub: #94a3b8;
+            --bg-color: #ffffff;
+            --accent-color: #000000;
+            --glass-bg: #ffffff;
+            --glass-border: #e2e8f0;
+            --text-main: #000000;
+            --text-sub: #64748b;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -23,8 +25,8 @@
             font-family: 'Plus Jakarta Sans', sans-serif;
             overflow-x: hidden;
             background-image: 
-                radial-gradient(circle at 20% 20%, rgba(0, 242, 255, 0.05) 0%, transparent 40%),
-                radial-gradient(circle at 80% 80%, rgba(0, 242, 255, 0.05) 0%, transparent 40%);
+                radial-gradient(circle at 20% 20%, rgba(0, 0, 0, 0.02) 0%, transparent 40%),
+                radial-gradient(circle at 80% 80%, rgba(0, 0, 0, 0.02) 0%, transparent 40%);
         }
 
         /* --- Navbar --- */
@@ -104,19 +106,20 @@
         }
 
         input, select, textarea {
-            background: rgba(255, 255, 255, 0.05);
+            background: transparent;
             border: 1px solid var(--glass-border);
             border-radius: 12px;
             padding: 1rem;
-            color: white;
+            color: var(--text-main);
+            font-weight: 600;
             font-family: inherit;
             transition: all 0.3s ease;
         }
 
-        input:focus {
+        input:focus, select:focus {
             outline: none;
             border-color: var(--accent-color);
-            box-shadow: 0 0 20px rgba(0, 242, 255, 0.2);
+            box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
         }
 
         /* --- Steps --- */
@@ -136,7 +139,7 @@
 
         .dot.active {
             background: var(--accent-color);
-            box-shadow: 0 0 10px var(--accent-color);
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
         }
 
         /* --- Button --- */
@@ -146,7 +149,7 @@
             background: var(--accent-color);
             border: none;
             border-radius: 12px;
-            color: #000;
+            color: #ffffff;
             font-weight: 800;
             font-size: 1rem;
             text-transform: uppercase;
@@ -157,7 +160,7 @@
 
         .btn-glow:hover {
             transform: translateY(-5px);
-            box-shadow: 0 15px 30px rgba(0, 242, 255, 0.4);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15);
         }
 
         /* --- Footer --- */
@@ -193,52 +196,241 @@
     <div class="intake-root">
         <form id="blueprintForm">
             <div class="grid">
-                <!-- Seccion 1 -->
-                <div class="input-group">
-                    <label>Nombre del Proyecto</label>
-                    <input type="text" id="nombre_obra" value="Residencia Las Chacras 2" placeholder="Ej: Casa Bosque">
+                <!-- Zona de Upload de Planos -->
+                <div class="input-group" style="grid-column: 1 / -1; margin-bottom: 1rem;">
+                    <h4 style="font-weight: 800; font-size: 0.85rem; letter-spacing: 0.1em; color: #000; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 0.5rem; margin-bottom: 0.5rem;">Inteligencia Visual (Ingesta de Planos)</h4>
+                    <div id="drop-zone" style="border: 2px dashed #000000; border-radius: 12px; padding: 2.5rem 1rem; text-align: center; cursor: pointer; transition: all 0.3s; background: rgba(0,0,0,0.02);">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 1rem;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        <br>
+                        <span id="drop-text" style="color: #000; font-weight: 800; font-size: 0.95rem;">Arrastrá tus planos aquí o hacé clic (PDF, JPG, CAD)</span>
+                        <p style="color: #64748b; font-size: 0.75rem; margin-top: 0.5rem; font-weight: 600;">El agente de IA extraerá las superficies y configurará el blueprint automáticamente.</p>
+                        <input type="file" id="archivos_upload" multiple accept=".pdf,.jpg,.jpeg,.png,.dwg" style="display: none;">
+                    </div>
                 </div>
-                <div class="input-group">
-                    <label>Ubicación Geográfica</label>
-                    <input type="text" id="ubicacion" value="Escobar, Buenos Aires" placeholder="Ciudad, Provincia">
+
+                <!-- Seccion 1: Identificacion y Mapa -->
+                <div style="grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2.5rem; margin-bottom: 1rem;">
+                    <div style="display: flex; flex-direction: column; gap: 2.5rem;">
+                        <div class="input-group">
+                            <label>Nombre del Proyecto</label>
+                            <input type="text" id="nombre_obra" value="Residencia Las Chacras 2" placeholder="Ej: Casa Bosque">
+                        </div>
+                        <div class="input-group">
+                            <label>Ubicación Geográfica (GeoTagrado automático)</label>
+                            <input type="text" id="ubicacion" value="Belén de Escobar, Buenos Aires" placeholder="Ciudad, Provincia">
+                        </div>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label>Marcador de Obra</label>
+                        <div id="map" style="width: 100%; min-height: 250px; border-radius: 12px; border: 1px solid #e2e8f0; z-index: 1;"></div>
+                    </div>
                 </div>
-                
-                <!-- Seccion 2 -->
+
+                <!-- Seccion 2: Terreno e Implantacion -->
+                <div class="input-group" style="grid-column: 1 / -1; margin-top: 1rem;">
+                    <h4 style="font-weight: 800; font-size: 0.85rem; letter-spacing: 0.1em; color: #000; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 0.5rem; margin-bottom: 0.5rem;">Terreno & Programa Arquitectónico</h4>
+                </div>
+
+                <!-- Seccion Superficies -->
                 <div class="input-group">
                     <label>Superficie Cubierta (m²)</label>
-                    <input type="number" id="superficie_cubierta_m2" value="150">
+                    <input type="number" id="superficie_cubierta_m2" value="150" required>
                 </div>
                 <div class="input-group">
                     <label>Superficie Semicubierta (m²)</label>
                     <input type="number" id="superficie_semicubierta_m2" value="70">
                 </div>
 
-                <!-- Seccion 3 -->
                 <div class="input-group">
-                    <label>Sistema Constructivo</label>
-                    <select id="estructura">
-                        <option value="albanileria">Albañilería Tradicional</option>
-                        <option value="steel_frame">Steel Frame</option>
-                        <option value="hormigon_armado">Hormigón Visto</option>
-                        <option value="mixto" selected>Mixto / Híbrido</option>
+                    <label>Entorno del Lote</label>
+                    <select id="terreno_tipo">
+                        <option value="lote_propio">Lote Urbano / Abierto</option>
+                        <option value="barrio_cerrado" selected>Barrio Cerrado / Country</option>
+                        <option value="ph">PH / Condominio</option>
                     </select>
                 </div>
+
                 <div class="input-group">
-                    <label>Categoría de Terminación</label>
+                    <label>Desnivel e Inundabilidad</label>
+                    <select id="terreno_zona_inundable">
+                        <option value="false" selected>Terreno Plano Normal</option>
+                        <option value="requiere_relleno">Requiere Relleno / Desnivel</option>
+                        <option value="true">Zona Inundable (Pilotines Perimetrales)</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label>Plantas</label>
+                    <select id="plantas">
+                        <option value="1" selected>1 Planta</option>
+                        <option value="2">2 Plantas</option>
+                        <option value="3">3 Plantas</option>
+                        <option value="pb_semisotano">PB + Semisótano</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label>Baños Totales</label>
+                    <select id="cantidad_banos">
+                        <option value="1">1 Baño</option>
+                        <option value="2" selected>2 Baños</option>
+                        <option value="3">3 Baños</option>
+                        <option value="4">4+ Baños</option>
+                    </select>
+                </div>
+
+                <!-- Seccion: Logistica e Infraestructura -->
+                <div class="input-group" style="grid-column: 1 / -1; margin-top: 1rem;">
+                    <h4 style="font-weight: 800; font-size: 0.85rem; letter-spacing: 0.1em; color: #000; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 0.5rem; margin-bottom: 0.5rem;">Logística, Acceso e Infraestructura Lote</h4>
+                </div>
+                
+                <div class="input-group">
+                    <label>Acceso a Obra (Fletes & Bomba)</label>
+                    <select id="logistica_acceso">
+                        <option value="asfalto_directo" selected>Asfalto Directo (Fácil Acceso)</option>
+                        <option value="camino_tierra">Camino de Tierra (Complecidad Media)</option>
+                        <option value="dificil_acceso_montana">Montaña / Terreno Escarpado</option>
+                        <option value="delta_embarcacion">Acceso Isleño (Embarcación Exclusiva)</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label>Infraestructura de Servicios</label>
+                    <select id="servicios_lote">
+                        <option value="todos_conectados" selected>Agua, Red Cloacal y Eléctrica</option>
+                        <option value="sin_gas_natural">Sin Gas Natural (Todo Eléctrico)</option>
+                        <option value="sin_cloacas_biodigestor">Sin Cloacas (Requiere Biodigestor/Lecho)</option>
+                        <option value="off_grid_total">Off-Grid Total (Perforación, Baterías, etc)</option>
+                    </select>
+                </div>
+
+                <!-- Seccion 3: Envolvente & Terminaciones -->
+                <div class="input-group" style="grid-column: 1 / -1; margin-top: 1rem;">
+                    <h4 style="font-weight: 800; font-size: 0.85rem; letter-spacing: 0.1em; color: #000; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 0.5rem; margin-bottom: 0.5rem;">Criterios Estructurales & Envolvente</h4>
+                </div>
+
+                <div class="input-group" style="grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2.5rem;">
+                    <div class="input-group">
+                        <label>Sistema Constructivo Principal</label>
+                        <select id="estructura" onchange="document.getElementById('container_mixto').style.display = this.value === 'mixto' ? 'flex' : 'none'">
+                            <option value="albanileria">Albañilería Tradicional</option>
+                            <option value="steel_frame">Steel Frame</option>
+                            <option value="hormigon_armado">Hormigón Visto</option>
+                            <option value="mixto" selected>Mixto / Híbrido</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group" id="container_mixto" style="display: flex; gap: 1rem; flex-direction: row;">
+                        <div style="flex: 1; display: flex; flex-direction: column; gap: 0.8rem;">
+                            <label style="color: #000; font-weight: 800;">Sistema Base (PB)</label>
+                            <select id="estructura_mixta_1" style="border-color: #000;">
+                                <option value="albanileria" selected>Albañilería</option>
+                                <option value="hormigon_armado">Hormigón Visto</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1; display: flex; flex-direction: column; gap: 0.8rem;">
+                            <label style="color: #000; font-weight: 800;">Sistema Alta (PA)</label>
+                            <select id="estructura_mixta_2" style="border-color: #000;">
+                                <option value="steel_frame" selected>Steel Frame</option>
+                                <option value="madera">Madera a la vista</option>
+                                <option value="albanileria">Albañilería</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group" style="grid-column: 1 / -1; margin-top: 1rem; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 1rem;">
+                    <h5 style="font-weight: 800; font-size: 0.75rem; color: #000; text-transform: uppercase;">Mampostería y Volumetría Exacta</h5>
+                </div>
+
+                <div class="input-group">
+                    <label>Tipo de Ladrillo (Mampostería)</label>
+                    <select id="tipo_ladrillo">
+                        <option value="hueco_15" selected>Hueco Cerámico (15cm) - Cierre</option>
+                        <option value="portante_18">Portante Cerámico (18cm) - Estructural</option>
+                        <option value="retak_hcca">Retak / HCCA - Térmico</option>
+                        <option value="macizo_comun">Ladrillo Macizo (Común) - Tradicional</option>
+                        <option value="bloque_hormigon">Bloque de Hormigón - Industrial</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label>Altura Libre de Techos</label>
+                    <select id="altura_techo">
+                        <option value="2.60" selected>2.60m (Altura Estándar)</option>
+                        <option value="2.80">2.80m (Altura Premium)</option>
+                        <option value="3.20">3.20m (Alta Gama / Monumental)</option>
+                        <option value="doble_altura">Doble Altura / Loft Mixto</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label>Espesor de Muros Ext.</label>
+                    <select id="espesor_muros">
+                        <option value="15" selected>15 cm (Muro Simple Estándar)</option>
+                        <option value="18">18 cm (Portante Simple)</option>
+                        <option value="20">20 cm (Retak / HCCA)</option>
+                        <option value="30">30 cm (Doble Muro / Alta Inercia)</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label>Espesor de Losas Estructurales</label>
+                    <select id="espesor_losa">
+                        <option value="15" selected>15 cm (Luces Cortas / Viguetas)</option>
+                        <option value="20">20 cm (Maciza / Luces Amplias)</option>
+                        <option value="nervurada">Losa Nervurada / Casetonada</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label>Ingeniería de Fundaciones (Base)</label>
+
+                    <select id="tipo_fundacion">
+                        <option value="platea_estandar" selected>Platea H°A° (Suelo Normal)</option>
+                        <option value="zapatas_aisladas">Zapatas (Suelo Firme / Tosca)</option>
+                        <option value="pilotines_profundos">Pilotines a Profundidad (Arcilloso / Relleno)</option>
+                    </select>
+                </div>
+
+                
+                <div class="input-group">
+                    <label>Cubierta / Techo</label>
+                    <select id="cubierta">
+                        <option value="chapa_acanalada">Chapa Acanalada / Oculta</option>
+                        <option value="techo_verde">Techo Verde (Ecológico)</option>
+                        <option value="membrana_losa" selected>Losa Impermeabilizada</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label>Aberturas (Carpintería)</label>
+                    <select id="aberturas">
+                        <option value="aluminio_basico">Aluminio Línea Herrero/Modena</option>
+                        <option value="aluminio_dvh" selected>Aluminio c/ DVH (A30/RPT)</option>
+                        <option value="pvc">PVC Alta Prestación</option>
+                        <option value="madera">Madera a Medida</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label>Revestimiento Exterior</label>
+                    <select id="revestimiento_exterior">
+                        <option value="revoque_fino" selected>Revoque Fino / Tarquini</option>
+                        <option value="piedra">Revestimiento Piedra Natural</option>
+                        <option value="chapa">Revestimiento Chapa Prepintada</option>
+                        <option value="mixto">Mixto (Revoque + Madera/Piedra)</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label>Categoría Interior</label>
                     <select id="categoria">
                         <option value="economico">Económico (Base)</option>
                         <option value="estandar" selected>Estándar (Calidad)</option>
                         <option value="premium">Premium (Gama Alta)</option>
                         <option value="lujo">Luxury (Exclusivo)</option>
-                    </select>
-                </div>
-
-                <div class="input-group">
-                    <label>Cubierta / Techo</label>
-                    <select id="cubierta">
-                        <option value="chapa_acanalada">Chapa Acanalada</option>
-                        <option value="techo_verde">Techo Verde (Ecológico)</option>
-                        <option value="membrana_losa" selected>Losa Impermeabilizada</option>
                     </select>
                 </div>
 
@@ -249,6 +441,73 @@
                         <option value="porcelanato" selected>Porcelanato Rectificado</option>
                         <option value="madera">Madera Natural</option>
                         <option value="microcemento">Microcemento Alisado</option>
+                    </select>
+                </div>
+
+                <!-- Seccion 4: Alta Gama -->
+                <div class="input-group" style="grid-column: 1 / -1; margin-top: 1rem;">
+                    <h4 style="font-weight: 800; font-size: 0.85rem; letter-spacing: 0.1em; color: #000; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 0.5rem; margin-bottom: 0.5rem;">Criterios High-End (Sistemas & Confort)</h4>
+                </div>
+
+                <div class="input-group">
+                    <label>Aislación Térmica</label>
+                    <select id="aislacion_termica">
+                        <option value="estandar">Tradicional</option>
+                        <option value="doble_muro">Doble Muro c/ Cámara</option>
+                        <option value="eifs_exterior" selected>EIFS Exterior (Pro)</option>
+                        <option value="poliuretano_inyectado">Poliuretano Inyectado</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label>Climatización</label>
+                    <select id="sistema_climatizacion">
+                        <option value="splits_inverter">Splits Inverter</option>
+                        <option value="piso_radiante_caldera" selected>Piso Radiante + Caldera</option>
+                        <option value="vrv_vrf_central">VRV / VRF Central</option>
+                        <option value="bomba_de_calor_geotermica">Geotermia</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label>Domótica & Smart Home</label>
+                    <select id="nivel_domotica">
+                        <option value="ninguno">Convencional</option>
+                        <option value="basica_iluminacion">Luces y Accesos Inteligentes</option>
+                        <option value="integral_knx_control" selected>Sistema Integral Avanzado (KNX)</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label>Muebles de Cocina (Millwork)</label>
+                    <select id="muebles_cocina">
+                        <option value="bajo_mesada_basico">Estándar MDF</option>
+                        <option value="equipamiento_integral_isla">Integral con Isla</option>
+                        <option value="premium_herrajes_blum" selected>Alta Gama (Herrajes Alemanes)</option>
+                    </select>
+                </div>
+                
+                <!-- Seccion 5: Exteriores Completos -->
+                <div class="input-group" style="grid-column: 1 / -1; margin-top: 1rem;">
+                    <h4 style="font-weight: 800; font-size: 0.85rem; letter-spacing: 0.1em; color: #000; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 0.5rem; margin-bottom: 0.5rem;">Exteriores & Master Plan</h4>
+                </div>
+
+                <div class="input-group">
+                    <label>Espejo de Agua (Piscina)</label>
+                    <select id="espejo_agua">
+                        <option value="ninguna">Sin Piscina</option>
+                        <option value="estandar_skimmer" selected>Piscina Estandar (Skimmer) H°A°</option>
+                        <option value="premium_borde_infinito">Infinity Pool / Borde Finlandés</option>
+                        <option value="biopiscina">Biopiscina / Natural</option>
+                    </select>
+                </div>
+
+                <div class="input-group">
+                    <label>Master Paisajismo</label>
+                    <select id="paisajismo">
+                        <option value="basico_cesped">Nivelado y Siembra Césped</option>
+                        <option value="diseno_integral_riego" selected>Diseño Integral + Riego Automático</option>
+                        <option value="premium_ejemplares_adultos">Premium (Ejemplares Adultos e Iluminación)</option>
                     </select>
                 </div>
             </div>
@@ -267,57 +526,286 @@
         © 2026 Architect Intel | Agente de Presupuestos Autónomo v9.0 | Agustín Arquitectura
     </footer>
 
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <script>
+        // --- MAPA LEAFLET x GOOGLE MAPS ---
+        // Coordenadas base (Escobar, BsAs)
+        const map = L.map('map', { scrollWheelZoom: false }).setView([-34.3411, -58.7842], 12);
+        
+        // Timeout para asegurar que el contenedor Grid termine de renderizarse y Leaflet dibuje los tiles
+        setTimeout(() => { map.invalidateSize(); }, 300);
+
+        // Capa Híbrida de Google Maps (Satélite + Vías)
+        L.tileLayer('https://mt0.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            attribution: '&copy; Google Maps',
+            maxZoom: 20
+        }).addTo(map);
+
+        let marker = L.marker([-34.3411, -58.7842], {draggable: true}).addTo(map);
+
+        map.on('click', function(e) {
+            marker.setLatLng(e.latlng);
+            actualizarTextoUbicacion(e.latlng);
+        });
+
+        marker.on('dragend', function(e) {
+            actualizarTextoUbicacion(marker.getLatLng());
+        });
+
+        // Geocodificación inversa (Nominatim)
+        async function actualizarTextoUbicacion(latlng) {
+            try {
+                // Throttle manual
+                const inputUbicacion = document.getElementById('ubicacion');
+                inputUbicacion.value = "Calculando coordenadas...";
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latlng.lat}&lon=${latlng.lng}&format=json`);
+                const data = await res.json();
+                
+                if (data && data.address) {
+                    const ciudad = data.address.city || data.address.town || data.address.village || data.address.county || "";
+                    const provincia = data.address.state || "";
+                    const direccion = ciudad && provincia ? `${ciudad}, ${provincia}` : (ciudad || provincia || "Ubicación personalizada");
+                    inputUbicacion.value = direccion.trim().replace(/^,\s*/, '');
+                } else {
+                    inputUbicacion.value = `${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`;
+                }
+            } catch (e) {
+                console.warn('Geocoding falló', e);
+            }
+        }
+
+        // Lógica de Drag & Drop
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('archivos_upload');
+        const dropText = document.getElementById('drop-text');
+
+        // Inicializar UI selectores mixtos
+        document.getElementById('container_mixto').style.display = document.getElementById('estructura').value === 'mixto' ? 'flex' : 'none';
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.background = 'rgba(0,0,0,0.05)';
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.background = 'rgba(0,0,0,0.02)';
+        });
+
+        let archivosAcumulados = [];
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.background = 'rgba(0,0,0,0.02)';
+            if (e.dataTransfer.files.length > 0) {
+                for(let file of e.dataTransfer.files) {
+                    archivosAcumulados.push(file);
+                }
+                actualizarTextoArchivos();
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                for(let file of e.target.files) {
+                    archivosAcumulados.push(file);
+                }
+                actualizarTextoArchivos();
+            }
+        });
+
+        function actualizarTextoArchivos() {
+            if (archivosAcumulados.length > 0) {
+                dropText.innerHTML = `<b>${archivosAcumulados.length} archivo(s) acumulados listos para IA 💡</b><br><span style="font-size:0.75rem; color:#64748b;">(Podés arrastrar o hacer clic para sumar más planos)</span>`;
+                dropZone.style.borderColor = '#000';
+                dropZone.style.background = '#fff';
+            }
+        }
+
         // Lógica de envío al servidor (Express)
         document.getElementById('blueprintForm').onsubmit = async (e) => {
             e.preventDefault();
             const btn = document.getElementById('btnSubmit');
-            btn.innerText = 'Calculando Mercado...';
+            btn.innerText = 'Analizando Multimedia...';
             btn.disabled = true;
 
-            const data = {
-                id: "B-" + Date.now(),
-                nombre_obra: document.getElementById('nombre_obra').value,
-                ubicacion: document.getElementById('ubicacion').value,
-                superficie_cubierta_m2: parseFloat(document.getElementById('superficie_cubierta_m2').value),
-                superficie_semicubierta_m2: parseFloat(document.getElementById('superficie_semicubierta_m2').value),
-                estructura: document.getElementById('estructura').value,
-                categoria: document.getElementById('categoria').value,
-                cubierta: document.getElementById('cubierta').value,
-                pisos: document.getElementById('pisos').value,
-                factor_terminacion: 1.35, 
-                version: 1,
-                usuario_id: "agustin_studio",
-                estudio_id: "studio_001",
-                fecha_creacion: new Date().toISOString(),
-                terreno: { tipo: "lote_propio" },
-                plazo_meses: 12,
-                modalidad: "llave_en_mano",
-                instalaciones: ["electrica", "sanitaria", "gas"],
-                aberturas: "aluminio_dvh",
-                plantas: 1
-            };
+            let archivosSubidos = [];
 
             try {
-                const res = await fetch('/api/presupuesto', {
+                if (archivosAcumulados.length > 0) {
+                    const formData = new FormData();
+                    for (let file of archivosAcumulados) {
+                        formData.append('archivos', file);
+                    }
+                    const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+                    const uploadData = await uploadRes.json();
+                    if (uploadData.success) {
+                        archivosSubidos = uploadData.archivos;
+                        btn.innerText = 'Extrayendo Datos (Vision AI)...';
+                    }
+                }
+
+                btn.innerText = 'Calculando Mercado...';
+                
+                const data = {
+                    id: "B-" + Date.now(),
+                    nombre_obra: document.getElementById('nombre_obra').value,
+                    ubicacion: document.getElementById('ubicacion').value,
+                    superficie_cubierta_m2: parseFloat(document.getElementById('superficie_cubierta_m2').value),
+                    superficie_semicubierta_m2: parseFloat(document.getElementById('superficie_semicubierta_m2').value),
+                    estructura: document.getElementById('estructura').value,
+                    composicion_mixta: document.getElementById('estructura').value === 'mixto' ? {
+                        base: document.getElementById('estructura_mixta_1').value,
+                        alta: document.getElementById('estructura_mixta_2').value
+                    } : null,
+                    categoria: document.getElementById('categoria').value,
+                    cubierta: document.getElementById('cubierta').value,
+                    pisos: document.getElementById('pisos').value,
+                    aberturas: document.getElementById('aberturas').value,
+                    revestimiento_exterior: document.getElementById('revestimiento_exterior').value,
+                    plantas: isNaN(parseInt(document.getElementById('plantas').value)) ? document.getElementById('plantas').value : parseInt(document.getElementById('plantas').value),
+                    cantidad_banos: parseInt(document.getElementById('cantidad_banos').value),
+                    
+                    // Defaults logicos para calculo
+                    tiene_planos: "anteproyecto",
+                    dormitorios: 3,
+                    tiene_cochera: true,
+                    tipo_cochera: "semicubierta",
+                    tiene_quincho: true,
+                    tiene_galeria: true,
+                    tiene_deck: false,
+                    cocina_equipada: true,
+                    tiene_escalera: document.getElementById('plantas').value !== "1",
+                    tipo_fundacion: document.getElementById('tipo_fundacion').value,
+                    cielorraso: "suspendido",
+                    calentador_agua: "termotanque_gas",
+                    tiene_cisterna: document.getElementById('servicios_lote').value !== 'todos_conectados',
+                    tiene_tanque_elevado: true,
+                    porton_cerco: true,
+                    
+                    factor_terminacion: 1.35, 
+                    version: 1,
+                    usuario_id: "agustin_studio",
+                    estudio_id: "studio_001",
+                    fecha_creacion: new Date().toISOString(),
+                    volumetria_y_materialidad: {
+                        tipo_ladrillo: document.getElementById('tipo_ladrillo').value,
+                        altura_techo: document.getElementById('altura_techo').value,
+                        espesor_muros_cm: document.getElementById('espesor_muros').value,
+                        espesor_losa_cm: document.getElementById('espesor_losa').value
+                    },
+                    terreno: { 
+                        tipo: document.getElementById('terreno_tipo').value, 
+                        zona_inundable: document.getElementById('terreno_zona_inundable').value === "true",
+                        desnivel_metros: document.getElementById('terreno_zona_inundable').value === "requiere_relleno" ? 1.5 : 0,
+                        logistica_acceso: document.getElementById('logistica_acceso').value,
+                        servicios: document.getElementById('servicios_lote').value
+                    },
+                    plazo_meses: 12,
+                    modalidad: "llave_en_mano",
+                    instalaciones: ["electrica", "sanitaria", "gas"],
+                    especificaciones_premium: {
+                        aislacion_termica: document.getElementById('aislacion_termica').value,
+                        sistema_climatizacion: document.getElementById('sistema_climatizacion').value,
+                        nivel_domotica: document.getElementById('nivel_domotica').value,
+                        muebles_cocina: document.getElementById('muebles_cocina').value,
+                        mesadas: "purastone_silestone",
+                        paisajismo: document.getElementById('paisajismo').value,
+                        espejo_agua: document.getElementById('espejo_agua').value,
+                        placards_y_vestidores: "interiores_completos_melamina"
+                    }
+                };
+
+                // If there are files, process them to merge into blueprint
+                if (archivosSubidos.length > 0) {
+                    btn.innerText = 'Cruzando Datos Multimedia...';
+                    const procRes = await fetch('/api/upload/procesar', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ blueprint: data, archivos: archivosSubidos })
+                    });
+                    const procData = await procRes.json();
+                    if (procData.success) {
+                        Object.assign(data, procData.blueprint);
+                    }
+                }
+
+                btn.innerText = 'Cotizando con Agentes...';
+                const res = await fetch('/api/presupuesto/generar', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify({ blueprint: data, archivos: archivosSubidos })
                 });
                 const result = await res.json();
                 
                 if (result.exito) {
-                    window.location.href = result.view_url || '/';
+                    const btn = document.getElementById('btnSubmit');
+                    btn.style.display = 'none';
+                    
+                    const resArea = document.getElementById('resultArea');
+                    resArea.style.display = 'block';
+                    
+                    let tiempoHTML = '';
+                    if (result.tiempo) {
+                        tiempoHTML = `<p style="margin-bottom: 1rem; color: #64748b;">⏱️ Tiempo total: ${result.tiempo.total_minutos} minutos</p>`;
+                    }
+                    
+                    resArea.innerHTML = `
+                        <div style="background: #ffffff; border: 1px solid #e2e8f0; padding: 3rem; border-radius: 16px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.05);">
+                            <h3 style="color: #000000; font-weight: 800; font-size: 1.5rem; margin-bottom: 1rem;">Libro de Obra Generado</h3>
+                            ${tiempoHTML}
+                            <p style="margin-bottom: 2.5rem; color: #64748b; font-size: 1.1rem;">Presupuesto estimado: <strong style="color: #000000; font-size: 1.4rem;">$${result.presupuesto.total_estimado.toLocaleString()} USD</strong></p>
+                            
+                            <div style="display: flex; gap: 1rem; justify-content: center;">
+                                <button onclick="descargar('pdf')" style="padding: 1rem 2rem; background: #ffffff; border: 2px solid #000000; color: #000000; border-radius: 8px; cursor: pointer; font-weight: 800; transition: all 0.2s;">DOCUMENTO PDF</button>
+                                <button onclick="descargar('excel')" style="padding: 1rem 2rem; background: #000000; color: #ffffff; border: 2px solid #000000; border-radius: 8px; cursor: pointer; font-weight: 800; transition: all 0.2s;">FUENTE EXCEL</button>
+                            </div>
+                        </div>
+                    `;
+                    window.presupuestoData = result.presupuesto;
                 } else {
                     alert('Error: ' + JSON.stringify(result.errores));
+                    btn.innerText = 'Generar Libro de Obra';
+                    btn.disabled = false;
                 }
             } catch (err) {
-                alert('Fallo de conexión con el motor.');
-            } finally {
+                alert('Fallo de conexión con el motor: ' + err.message);
                 btn.innerText = 'Generar Libro de Obra';
                 btn.disabled = false;
             }
         };
+
+        window.descargar = async (tipo) => {
+            if (!window.presupuestoData) return;
+            const endpoint = tipo === 'pdf' ? '/api/presupuesto/descargar/pdf' : '/api/presupuesto/descargar/excel';
+            
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ presupuesto: window.presupuestoData })
+                });
+                
+                if (res.ok) {
+                    const blob = await res.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = window.presupuestoData.obra.replace(/\\s+/g, '_') + '_Resumen.' + (tipo === 'pdf' ? 'pdf' : 'xlsx');
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                } else {
+                    alert('Error descargando el ' + tipo.toUpperCase());
+                }
+            } catch(e) {
+                alert('Fallo de red al descargar');
+            }
+        };
+
     </script>
 </body>
 </html>

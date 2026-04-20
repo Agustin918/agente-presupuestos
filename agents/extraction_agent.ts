@@ -1,9 +1,12 @@
 import { Blueprint, ExtractionResult } from "../blueprint/schema";
 import * as fs from "fs";
 import * as path from "path";
+import { analyzeBlueprintWithApify } from "../services/apify_blueprint";
 
 const UPLOAD_DIR = "./data/uploads";
-const TIMEOUT_MS = 10 * 60 * 1000; // 10 minutos
+const TIMEOUT_MS = 10 * 60 * 1000;
+const ODA_CONVERTER_PATH = "C:\\Program Files\\ODA\\ODAFileConverter 27.1.0\\ODAFileConverter.exe";
+const TEMP_DIR = "./data/temp";
 
 interface CampoExtraido {
   campo: string;
@@ -258,17 +261,74 @@ async function analizarDWG(
   console.log(`[Extraction]   Analizando DWG (AutoCAD)...`);
   
   try {
-    await delay(3000); // DWG requiere más procesamiento
+    if (!fs.existsSync(TEMP_DIR)) {
+      fs.mkdirSync(TEMP_DIR, { recursive: true });
+    }
+
+    const outputImage = path.join(TEMP_DIR, `${path.basename(filePath, '.dwg')}_${Date.now()}.png`);
     
-    // Análisis de DWG (en producción usaría biblioteca CAD)
-    // Por ahora análisis basado en metadatos
-    const contenido = fs.readFileSync(filePath);
-    const textoExtraido = extraerTextoDWG(contenido);
+    console.log(`[Extraction]   Convirtiendo DWG a PNG con ODAFileConverter...`);
     
-    archivo.elementos_detectados = detectarElementosEnTexto(textoExtraido);
-    archivo.analisis = `Archivo DWG con ${archivo.elementos_detectados.length} elementos`;
+    const { execSync } = require('child_process');
     
-    campos.push(...extraerCamposDeTexto(textoExtraido, 'dwg'));
+    try {
+      execSync(`"${ODA_CONVERTER_PATH}" "${filePath}" "${outputImage}" -o_out_format PNG -rl 300`, {
+        stdio: 'pipe',
+        timeout: 60000,
+      });
+      console.log(`[Extraction]   DWG convertido a: ${outputImage}`);
+    } catch (convError) {
+      console.log(`[Extraction]   ODAFileConverter fallback: extrayendo texto crudo del DWG`);
+      const contenido = fs.readFileSync(filePath);
+      const textoExtraido = extraerTextoDWG(contenido);
+      archivo.elementos_detectados = detectarElementosEnTexto(textoExtraido);
+      archivo.analisis = `DWG parseado (conversión visual no disponible)`;
+      campos.push(...extraerCamposDeTexto(textoExtraido, 'dwg'));
+      errores.push(`ODAFileConverter no pudo convertir: ${(convError as Error).message}`);
+      return { archivo, campos, errores };
+    }
+
+    if (fs.existsSync(outputImage)) {
+      console.log(`[Extraction]   Analizando imagen con Apify Blueprint Intelligence...`);
+      
+      const apifyResult = await analyzeBlueprintWithApify(outputImage, 'standard');
+      
+      archivo.elementos_detectados = apifyResult.rooms || [];
+      archivo.analisis = `DWG → PNG → Apify: ${apifyResult.documentType || 'desconocido'} (confianza: ${(apifyResult.confidence * 100).toFixed(0)}%)`;
+      
+      if (apifyResult.dimensions) {
+        campos.push({
+          campo: 'dimensiones_detectadas',
+          valor: apifyResult.dimensions,
+          confianza: apifyResult.confidence > 0.7 ? 'alta' : 'media',
+          fuente: 'apify_blueprint_intelligence',
+        });
+      }
+      
+      if (apifyResult.rooms) {
+        const dormitorios = apifyResult.rooms.filter((r: string) => 
+          /dormitorio|habitacion|bedroom|cuarto/i.test(r)
+        ).length;
+        const banos = apifyResult.rooms.filter((r: string) => 
+          /baño|bath|wc|bano/i.test(r)
+        ).length;
+        
+        if (dormitorios > 0) {
+          campos.push({ campo: 'dormitorios', valor: dormitorios, confianza: 'alta', fuente: 'apify' });
+        }
+        if (banos > 0) {
+          campos.push({ campo: 'cantidad_banos', valor: banos, confianza: 'alta', fuente: 'apify' });
+        }
+      }
+
+      if (apifyResult.error) {
+        errores.push(`Apify: ${apifyResult.error}`);
+      }
+      
+      fs.unlinkSync(outputImage);
+    } else {
+      throw new Error('Conversión DWG no generó archivo de salida');
+    }
     
   } catch (error) {
     errores.push(`Error analizando DWG: ${(error as Error).message}`);
@@ -288,18 +348,42 @@ async function analizarSKP(
   console.log(`[Extraction]   Analizando SKP (SketchUp)...`);
   
   try {
-    await delay(2000);
-    
-    // Análisis de SketchUp (en producción usar SDK)
-    // Por ahora inferir de nombre de archivo y metadatos
     const nombreArchivo = path.basename(filePath, '.skp');
-    
     archivo.analisis = `Modelo 3D SketchUp: ${nombreArchivo}`;
     
-    // Inferir datos del nombre si es posible
     const inferido = inferirDatosDeNombre(nombreArchivo);
     if (inferido) {
       campos.push(...inferido);
+    }
+
+    if (!fs.existsSync(TEMP_DIR)) {
+      fs.mkdirSync(TEMP_DIR, { recursive: true });
+    }
+
+    const posiblesImagenes = [
+      filePath.replace('.skp', '.png'),
+      filePath.replace('.skp', '.jpg'),
+      filePath.replace('.skp', '.pdf'),
+    ];
+
+    for (const imgPath of posiblesImagenes) {
+      if (fs.existsSync(imgPath)) {
+        console.log(`[Extraction]   SKP tiene imagen adjunta: ${path.basename(imgPath)}`);
+        const apifyResult = await analyzeBlueprintWithApify(imgPath, 'standard');
+        
+        archivo.elementos_detectados.push(...(apifyResult.rooms || []));
+        archivo.analisis += ` | Análisis de ${path.basename(imgPath)} (confianza: ${(apifyResult.confidence * 100).toFixed(0)}%)`;
+        
+        if (apifyResult.rooms) {
+          campos.push({ campo: 'habitaciones_detectadas', valor: apifyResult.rooms, confianza: 'media', fuente: 'apify' });
+        }
+        break;
+      }
+    }
+
+    if (archivo.elementos_detectados.length === 0) {
+      errores.push('SKP: Exportar manualmente a PNG/PDF desde SketchUp para análisis automático');
+      archivo.analisis += ' | Requiere exportación manual a imagen para análisis';
     }
     
   } catch (error) {

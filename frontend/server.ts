@@ -167,11 +167,20 @@ app.post('/api/presupuesto/generar', async (req, res) => {
       saveHistorial(historial.slice(0, 50));
       
       console.log(`[API] Éxito! Total: ${resultado.presupuesto?.total_estimado}`);
+      
+      // Calcular tiempo total
+      const tiempoTotalMs = resultado.logs.reduce((acc, log) => acc + (log.duracion_ms || 0), 0);
+      const tiempoTotalMin = (tiempoTotalMs / 60000).toFixed(1);
+      
       res.json({
         exito: true,
         presupuesto: resultado.presupuesto,
         version: resultado.version,
-        mensaje: 'Presupuesto generado exitosamente'
+        mensaje: 'Presupuesto generado exitosamente',
+        tiempo: {
+          total_minutos: parseFloat(tiempoTotalMin),
+          detalle: resultado.logs.map(l => ({ agente: l.agente, accion: l.accion, duracion_ms: l.duracion_ms }))
+        }
       });
     } else {
       console.log('[API] Falló:', resultado.errores);
@@ -404,15 +413,29 @@ app.get('/api/precios/comparar', async (req, res) => {
 app.post('/api/presupuesto/descargar/excel', async (req, res) => {
   try {
     const { presupuesto } = req.body;
-    const excelGenerator = require('../output/excel_generator');
-    const filePath = await excelGenerator.generarExcel(presupuesto, presupuesto.obra);
+    
+    console.log('[Excel] Solicitud recibida');
+    
+    if (!presupuesto) {
+      return res.status(400).json({ error: 'Presupuesto no proporcionado' });
+    }
+    
+    // Importar la instancia correcta del generador
+    const excelModule = require('../output/excel_generator');
+    const generator = excelModule.excelGenerator || new excelModule.ExcelGenerator();
+    const filePath = await generator.generarExcel(presupuesto, presupuesto.obra);
+    
+    const absPath = path.resolve(filePath);
+    if (!fs.existsSync(absPath)) {
+      return res.status(500).json({ error: 'Archivo Excel no encontrado tras generación' });
+    }
     
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${presupuesto.obra.replace(/\s+/g, '_')}_presupuesto.xlsx"`);
-    res.sendFile(path.resolve(filePath));
+    res.setHeader('Content-Disposition', `attachment; filename="${(presupuesto.obra || 'Presupuesto').replace(/\s+/g, '_')}_presupuesto.xlsx"`);
+    res.sendFile(absPath);
   } catch (error) {
-    console.error('Error generando Excel:', error);
-    res.status(500).json({ error: 'Error generando Excel' });
+    console.error('[Excel] Error completo:', error);
+    res.status(500).json({ error: 'Error generando Excel', detalles: (error as Error).message });
   }
 });
 
@@ -420,15 +443,26 @@ app.post('/api/presupuesto/descargar/excel', async (req, res) => {
 app.post('/api/presupuesto/descargar/pdf', async (req, res) => {
   try {
     const { presupuesto } = req.body;
-    const pdfGenerator = require('../output/pdf_generator');
+    
+    if (!presupuesto) {
+      return res.status(400).json({ error: 'Presupuesto no proporcionado' });
+    }
+    
+    const pdfModule = require('../output/pdf_generator');
+    const pdfGenerator = pdfModule.pdfGenerator || new pdfModule.PDFGenerator();
     const filePath = await pdfGenerator.generarPDF(presupuesto, presupuesto.obra);
     
+    const absPath = path.resolve(filePath);
+    if (!fs.existsSync(absPath)) {
+      return res.status(500).json({ error: 'Archivo PDF no encontrado tras generación' });
+    }
+    
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${presupuesto.obra.replace(/\s+/g, '_')}_presupuesto.pdf"`);
-    res.sendFile(path.resolve(filePath));
+    res.setHeader('Content-Disposition', `attachment; filename="${(presupuesto.obra || 'Presupuesto').replace(/\s+/g, '_')}_presupuesto.pdf"`);
+    res.sendFile(absPath);
   } catch (error) {
-    console.error('Error generando PDF:', error);
-    res.status(500).json({ error: 'Error generando PDF' });
+    console.error('[PDF] Error completo:', error);
+    res.status(500).json({ error: 'Error generando PDF', detalles: (error as Error).message });
   }
 });
 

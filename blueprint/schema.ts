@@ -19,6 +19,17 @@ export type TipoFundacion = "platea" | "zapata" | "pilotines" | "bases_aisladas"
 export type TipoEntrepiso = "viguetas_telgopor" | "viguetas_ceramico" | "losa_maciza" | "steel_deck" | "madera";
 export type PerfilSteelFrame = "p_89" | "p_100" | "p_140";
 
+// --- EXPANSIONES PREMIUM (v6.0) ---
+export type NivelAislacionTermica = "estandar" | "doble_muro" | "eifs_exterior" | "poliuretano_inyectado";
+export type SistemaClimatizacion = "splits_inverter" | "piso_radiante_caldera" | "vrv_vrf_central" | "bomba_de_calor_geotermica";
+export type RecuperacionAgua = "pluvial_riego" | "aguas_grises" | "ninguna";
+export type PlacardsYVestidores = "frentes_basicos" | "interiores_completos_melamina" | "madera_laqueada_premium" | "sin_provision";
+export type MueblesCocina = "bajo_mesada_basico" | "equipamiento_integral_isla" | "premium_herrajes_blum";
+export type MaterialMesadas = "granito_nacional" | "purastone_silestone" | "dekton_neolith";
+export type NivelDomotica = "ninguno" | "basica_iluminacion" | "integral_knx_control";
+export type NivelSeguridad = "ninguna" | "preinstalacion_alarmas" | "cctv_y_biometria_accesos";
+export type NivelPaisajismo = "basico_cesped" | "diseno_integral_riego" | "premium_ejemplares_adultos";
+
 export const FACTOR_TERMINACION: Record<Categoria, number> = {
   economico: 1.0,
   estandar: 1.35,
@@ -105,6 +116,19 @@ export interface Blueprint {
     steel_frame_espesor_chapa?: 0.9 | 1.25;
     cubierta_aislacion_termica?: string;
     cubierta_membrana?: string;
+  };
+
+  // Sección 8 — Especificaciones de Alta Gama (v6.0)
+  especificaciones_premium?: {
+    aislacion_termica?: NivelAislacionTermica;
+    sistema_climatizacion?: SistemaClimatizacion;
+    recuperacion_agua?: RecuperacionAgua;
+    placards_y_vestidores?: PlacardsYVestidores;
+    muebles_cocina?: MueblesCocina;
+    mesadas?: MaterialMesadas;
+    nivel_domotica?: NivelDomotica;
+    seguridad?: NivelSeguridad;
+    paisajismo?: NivelPaisajismo;
   };
 }
 

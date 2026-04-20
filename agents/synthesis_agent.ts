@@ -7,6 +7,7 @@ import { llmService } from "../services/llm";
 import { convertirArsAUsd } from "../utils/currency";
 import { ConstructionEngine } from "../logic/construction_engine";
 import { LogisticsEngine } from "../logic/logistics_engine";
+import { buscarLinkCompra } from "../data/links_compras";
 
 const CATEGORIAS_ETAPAS = {
   PRELIMINARES: "01 - Trabajos Preliminares",
@@ -81,9 +82,9 @@ export async function generarPresupuesto(
   const fleteUSD = convertirArsAUsd(reporteLogistico.costo_flete_estimado, tasaCambio);
   items.push(generarItemEspecial("Flete y Logística", `Transporte a ${reporteLogistico.distancia_km}km`, 1, "global", fleteUSD, CATEGORIAS_ETAPAS.PRELIMINARES));
 
-  // 6. Beneficio e Indirectos (30%)
+  // 6. Beneficio e Indirectos (20%) - estándar obra llave en mano
   const subtotalNeto = items.reduce((acc, i) => acc + i.subtotal, 0);
-  items.push(generarItemEspecial("Gastos Indirectos y Utilidad", "GGU (30% de costo directo)", 1, "global", Math.round(subtotalNeto * 0.3), CATEGORIAS_ETAPAS.PRELIMINARES));
+  items.push(generarItemEspecial("Gastos Indirectos y Utilidad", "GGU (20% de costo directo)", 1, "global", Math.round(subtotalNeto * 0.2), CATEGORIAS_ETAPAS.PRELIMINARES));
 
   const total = items.reduce((acc, i) => acc + i.subtotal, 0);
 
@@ -107,6 +108,7 @@ export async function generarPresupuesto(
 }
 
 function generarItemEspecial(rubro: string, desc: string, cant: number, un: string, pu: number, cat: string): ItemPresupuesto {
+  const link = buscarLinkCompra(rubro.toLowerCase());
   return {
     rubro,
     descripcion: desc,
@@ -115,8 +117,8 @@ function generarItemEspecial(rubro: string, desc: string, cant: number, un: stri
     precio_unitario: Math.round(pu),
     subtotal: Math.round(cant * pu),
     categoria: cat,
-    fuente: "Motor Inteligencia Estudios",
-    fuente_url: "",
+    fuente: link?.plataforma || "Motor Inteligencia Estudios",
+    fuente_url: link?.url || "",
     fecha_precio: new Date().toISOString().split('T')[0],
     confianza: "media",
     nota_confianza: "Cálculo técnico automático",

@@ -23,28 +23,38 @@ export class ResearchAgent {
     const cache = this.leerCache();
 
     console.log(`[ResearchAgent] Iniciando investigación técnica para ${materiales.length} materiales en ${ubicacion}`);
+    console.log(`[ResearchAgent] MODO: siempre buscar en internet (sin cache)`);
 
     for (const material of materiales) {
-      // 1. Verificar Cache
-      if (cache[material] && !this.estaVencido(cache[material].fecha)) {
-        console.log(`[ResearchAgent] USANDO CACHE para: ${material}`);
-        results[material] = {
-          ...cache[material],
-          material,
-          razonamiento_agente: "Precio recuperado de memoria local (vigente)."
-        };
-        continue;
-      }
-
-      // 2. Investigación en la web (Multi-fase)
+      // SIEMPRE buscar en internet - el cache solo como último recurso si falla la búsqueda
+      let precioEncontrado = false;
+      
       try {
+        console.log(`[ResearchAgent] 🔍 BUSCANDO en internet: ${material}`);
         const result = await this.investigarMaterial(material, ubicacion);
         if (result) {
           results[material] = result;
           cache[material] = result;
+          precioEncontrado = true;
         }
       } catch (error) {
-        console.error(`[ResearchAgent] Error investigando ${material}:`, error);
+        console.error(`[ResearchAgent] Error en ${material}:`, error);
+      }
+
+      // Solo si NO se encontró en internet, usar cache como fallback
+      if (!precioEncontrado && cache[material]) {
+        console.log(`[ResearchAgent] FALLBACK CACHE para: ${material}`);
+        results[material] = {
+          ...cache[material],
+          material,
+          razonamiento_agente: "⚠️ Precio del cache (búsqueda falló)"
+        };
+      }
+      
+      // Último fallback: precios paramétricos en USD
+      if (!precioEncontrado && !cache[material]) {
+        console.log(`[ResearchAgent] FALLBACK PARAMÉTRICO para: ${material}`);
+        results[material] = this.getPrecioParametrico(material);
       }
     }
 
@@ -52,49 +62,45 @@ export class ResearchAgent {
     return results;
   }
 
-  private async investigarMaterial(material: string, ubicacion: string): Promise<ResearchResult | null> {
+private async investigarMaterial(material: string, ubicacion: string): Promise<ResearchResult | null> {
     console.log(`[ResearchAgent] 🔍 DESCUBRIENDO: ${material}...`);
     
-    // Fase 1: Descubrimiento de fuentes específicas (Corralones, Easy, Sodimac, MercadoLibre)
-    const query = `precio "${material}" argentina ${ubicacion} sodimac easy mercadolibre corralon`;
-    const discovery = await searchOnline(query);
-    
-    if (discovery.length === 0) return null;
-
+    // Usar URLs de fuentes confiables directamente
+    const urls = this.getFuentesConfiables(material);
     const candidatos: ResearchResult[] = [];
 
-    // Fase 2: Navegación y Extracción (limitado a top 3 mejores fuentes para velocidad)
-    for (const source of discovery.slice(0, 3)) {
+    // Navegar directamente a las URLs de corralones y casas de materiales
+    for (const url of urls.slice(0, 2)) {
       try {
-        console.log(`[ResearchAgent] Navegando a: ${source.link}`);
-        const { content } = await browserService.browse(source.link);
+        console.log(`[ResearchAgent] Navegando a: ${url}`);
+        const { content } = await browserService.browse(url);
         const precio = extractPriceFromMarkdown(content, material);
         
         if (precio && precio > 0) {
           candidatos.push({
             material,
             precio,
-            unidad: "ARS", // Casi siempre pesos en búsqueda local
-            fuente: source.title,
-            fuente_url: source.link,
+            unidad: "ARS",
+            fuente: new URL(url).hostname,
+            fuente_url: url,
             fecha: new Date().toISOString().split('T')[0],
-            razonamiento_agente: `Extraído mediante navegación en ${new URL(source.link).hostname}`
+            razonamiento_agente: `Extraído de ${new URL(url).hostname}`
           });
         }
       } catch (e) {
-        console.warn(`[ResearchAgent] Falló extracción en ${source.link}`);
+        console.warn(`[ResearchAgent] Falló: ${url}`);
       }
     }
 
     if (candidatos.length === 0) return null;
 
-    // Fase 3: Selección Inteligente (Selección ponderada por coherencia)
+    // Seleccionar precio medio (evita outliers)
     candidatos.sort((a, b) => a.precio - b.precio);
-    const seleccion = candidatos[Math.floor(candidatos.length / 2)]; // Median para evitar outliers
+    const seleccion = candidatos[Math.floor(candidatos.length / 2)];
     
     return {
       ...seleccion,
-      razonamiento_agente: `Seleccionado mediante análisis de ${candidatos.length} fuentes reales. Valor representativo del mercado local.`
+      razonamiento_agente: `Seleccionado de ${candidatos.length} fuentes reales`
     };
   }
 
@@ -116,6 +122,74 @@ export class ResearchAgent {
     const f = new Date(fecha);
     const diff = Math.floor((hoy.getTime() - f.getTime()) / (1000 * 60 * 60 * 24));
     return diff > PRECIO_VIGENCIA_DIAS;
+  }
+
+  // Fuentes confiables por categoría de material
+  private getFuentesConfiables(material: string): string[] {
+    const m = encodeURIComponent(material.replace(/ /g, '+'));
+    
+    return [
+      `https://listado.mercadolibre.com.ar/${m}`,
+      `https://www.easy.com.ar/s/${m}`,
+      `https://www.sodimac.com.ar/s/${m}`,
+    ];
+  }
+
+  // Fallback: Precios paramétricos en USD basados en mercado argentino
+  private getPrecioParametrico(material: string): ResearchResult {
+    const precios: Record<string, number> = {
+      limpiador: 2,
+      replanteo: 3,
+      cartel: 80,
+      excavacion: 15,
+      relleno: 12,
+      hormigon_fundacion: 65,
+      viga_fundacion: 55,
+      columna: 45,
+      encadenado: 25,
+      ladrillo: 12,
+      ladrillo_12: 8,
+      hidrofugo: 8,
+      aislante: 10,
+      estructura_cubierta: 30,
+      cubierta: 18,
+      revoque_grueso: 12,
+      revoque_fino: 10,
+      cielorraso: 15,
+      contrapiso: 20,
+      piso: 28,
+      zocalo: 5,
+      electrica: 35,
+      sanitaria: 45,
+      desague: 12,
+      gas: 30,
+      aire: 280,
+      inodoro: 150,
+      ducha: 220,
+      lavatorio: 120,
+      griferia_cocina: 85,
+      puerta_interior: 120,
+      ventana: 180,
+      vidrio: 22,
+      placard: 200,
+      pintura: 8,
+      pintura_exterior: 10,
+      limpieza_final: 5,
+      ayuda_gremio: 1500,
+    };
+
+    const key = material.toLowerCase().replace(/ /g, '_');
+    const precio = precios[key] || 10;
+
+    return {
+      material,
+      precio,
+      unidad: 'USD',
+      fuente: 'Base paramétrica estudios',
+      fuente_url: '',
+      fecha: new Date().toISOString().split('T')[0],
+      razonamiento_agente: '⚠️ Precio paramétrico USD (web no disponible)'
+    };
   }
 }
 
